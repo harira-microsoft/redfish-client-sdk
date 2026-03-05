@@ -63,7 +63,24 @@ struct ConnectionConfig {
     long        task_poll_interval_sec  = 5;
     long        task_timeout_sec        = 300;
     bool        allow_session_fallback  = false;
+    // v0.2 — retry (FR1.8, FR1.9)
+    int              retry_on_connection_failure = 0;
+    std::vector<int> retry_status_codes;          // e.g. {503, 429}
+    double           retry_delay_sec             = 2.0;
 };
+
+// ── SEL parsing (FR6.6) ───────────────────────────────────────────────────────
+
+struct ParsedSelRecord {
+    std::string record_type;   // "PxeBoot" | "HostOsModeChange" | "HostOsHandOff" | "Unknown"
+    uint32_t    timestamp      = 0;  // bytes[3..6] little-endian
+    std::string raw_hex;       // space-stripped hex string used for parsing
+};
+
+// Parse a raw SEL hex string into a ParsedSelRecord.
+// Accepts optional OpenBMC prefix "Raw Data : Hex <hex>" and embedded spaces.
+// Throws RedfishSDKError if the string is too short or contains invalid hex.
+ParsedSelRecord parse_sel_entry(const std::string& raw_hex);
 
 // ── Capabilities ─────────────────────────────────────────────────────────────
 

@@ -4,6 +4,7 @@
 
 #include "redfish_sdk/services/event_service.hpp"
 #include "redfish_sdk/transport/auth.hpp"
+#include "../internal/logger.hpp"
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <iomanip>
@@ -20,7 +21,7 @@ static std::string iso8601_now() {
 }
 
 EventServiceHandle::EventServiceHandle(
-    HttpClient&                              http,
+    IHttpClient&                             http,
     const AuthState&                         auth_state,
     const std::map<std::string, std::string>& discovery_map
 )

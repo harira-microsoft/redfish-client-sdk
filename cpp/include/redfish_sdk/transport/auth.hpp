@@ -16,7 +16,7 @@ namespace redfish {
 class AuthManager {
 public:
     AuthManager(
-        HttpClient&        http,
+        IHttpClient&       http,
         const Credentials& credentials,
         AuthMode           mode
     );
@@ -34,7 +34,7 @@ public:
     void logout(const AuthState& state);
 
 private:
-    HttpClient&  http_;
+    IHttpClient& http_;
     Credentials  credentials_;
     AuthMode     mode_;
 

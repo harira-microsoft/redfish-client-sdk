@@ -14,7 +14,7 @@ namespace redfish {
 class TelemetryServiceHandle {
 public:
     TelemetryServiceHandle(
-        HttpClient&                              http,
+        IHttpClient&                             http,
         const AuthState&                         auth_state,
         const std::map<std::string, std::string>& discovery_map
     );
@@ -26,7 +26,7 @@ public:
     RedfishResponse list_report_definitions();
 
 private:
-    HttpClient&                              http_;
+    IHttpClient&                             http_;
     const AuthState&                         auth_state_;
     const std::map<std::string, std::string>& discovery_map_;
 

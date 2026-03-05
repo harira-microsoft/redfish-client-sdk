@@ -14,7 +14,7 @@ namespace redfish {
 class UpdateServiceHandle {
 public:
     UpdateServiceHandle(
-        HttpClient&                              http,
+        IHttpClient&                             http,
         const AuthState&                         auth_state,
         const std::map<std::string, std::string>& discovery_map
     );
@@ -27,9 +27,16 @@ public:
         const std::string& transfer_protocol = "HTTP",
         const std::vector<std::string>& targets = {}
     );
+    // Multipart firmware push — FR7.5
+    // firmware_path: local file to upload
+    // update_params: optional JSON object for UpdateParameters field
+    RedfishResponse push_firmware(
+        const std::string&    firmware_path,
+        const nlohmann::json& update_params = nullptr
+    );
 
 private:
-    HttpClient&                              http_;
+    IHttpClient&                             http_;
     const AuthState&                         auth_state_;
     const std::map<std::string, std::string>& discovery_map_;
 

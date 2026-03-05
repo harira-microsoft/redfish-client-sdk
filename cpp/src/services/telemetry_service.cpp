@@ -4,11 +4,12 @@
 
 #include "redfish_sdk/services/telemetry_service.hpp"
 #include "redfish_sdk/transport/auth.hpp"
+#include "../internal/logger.hpp"
 
 namespace redfish {
 
 TelemetryServiceHandle::TelemetryServiceHandle(
-    HttpClient&                              http,
+    IHttpClient&                             http,
     const AuthState&                         auth_state,
     const std::map<std::string, std::string>& discovery_map
 )

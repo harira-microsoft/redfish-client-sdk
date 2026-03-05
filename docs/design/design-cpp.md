@@ -1,9 +1,9 @@
 # Redfish Client SDK — C++ Design
 
 **Document ID:** RSDK-DESIGN-002  
-**Version:** 0.1 (Draft)  
+**Version:** 0.2  
 **Status:** Locked  
-**Date:** March 4, 2026  
+**Date:** March 6, 2026  
 **Author:** Hari  
 **Requirement Ref:** RSDK-REQ-001  
 **Architecture Ref:** RSDK-ARCH-001, RSDK-ARCH-003  
@@ -211,6 +211,9 @@ public:
     boost::asio::awaitable<RedfishResponse> patch_async (std::string_view uri, nlohmann::json body);
     boost::asio::awaitable<RedfishResponse> del_async   (std::string_view uri);
 
+    // v0.2 — re-authenticate without creating a new context
+    void refresh_auth();
+
     // Lifecycle (RAII preferred — destructor handles this automatically)
     void close();
     boost::asio::awaitable<void> close_async();
@@ -265,10 +268,26 @@ struct ConnectionConfig {
     float       task_poll_interval_sec = 5.0f;
     float       task_timeout_sec       = 300.0f;
     std::string base_path_override     = "";        // empty = /redfish/v1
+    bool        allow_session_fallback = false;
+
+    // v0.2 — retry (FR1.8, FR1.9)
+    int              retry_on_connection_failure = 0;   // 0 = no retry
+    std::vector<int> retry_status_codes          = {};  // e.g. {503, 429}
+    double           retry_delay_sec             = 2.0; // seconds between attempts
 };
 ```
 
 All fields have defaults. Pass `{}` to accept all defaults.
+
+### Retry behaviour (v0.2)
+
+| Field | Meaning |
+|---|---|
+| `retry_on_connection_failure` | Number of extra attempts after a transport error |
+| `retry_status_codes` | HTTP status codes that trigger a retry (e.g. `503`, `429`) |
+| `retry_delay_sec` | Fixed delay between attempts |
+
+TLS errors (`RedfishTLSError`) are never retried. Retry logic lives in `DefaultHttpClient::request()`.
 
 ---
 
@@ -546,36 +565,49 @@ struct RedfishEvent {
 class LogServiceHandle {
 public:
     RedfishResponse list_services();
-    boost::asio::awaitable<RedfishResponse> list_services_async();
 
-    RedfishResponse get_entries(
-        std::string_view          log_service_uri,
-        std::optional<LogFilter>  filter = std::nullopt
-    );
-    boost::asio::awaitable<RedfishResponse> get_entries_async(
-        std::string_view          log_service_uri,
-        std::optional<LogFilter>  filter = std::nullopt
+    // list_entries: appends /Entries to log_uri; optional $top and $filter OData params
+    RedfishResponse list_entries(
+        const std::string&         log_uri,
+        std::optional<int>         top    = std::nullopt,
+        const std::string&         filter = ""
     );
 
-    RedfishResponse get_entry(std::string_view entry_uri);
-    boost::asio::awaitable<RedfishResponse> get_entry_async(std::string_view entry_uri);
+    RedfishResponse get_entry(const std::string& entry_uri);
 
-    RedfishResponse clear_log(std::string_view log_service_uri);
-    boost::asio::awaitable<RedfishResponse> clear_log_async(std::string_view log_service_uri);
+    RedfishResponse clear_log(const std::string& log_uri);
 };
 ```
 
-### LogFilter
+### v0.2 — SEL Parsing
+
+The SDK now ships a standalone helper for decoding OpenBMC binary SEL entries
+(FR8.2). It lives in `redfish_types.hpp` and has no network dependency.
 
 ```cpp
-struct LogFilter {
-    std::optional<std::string> severity;       // "OK" | "Warning" | "Critical"
-    std::optional<std::string> start_time;     // ISO 8601
-    std::optional<std::string> end_time;       // ISO 8601
-    std::optional<std::string> message_id;     // filter by MessageId prefix
-    std::optional<int>         max_entries;
+struct ParsedSelRecord {
+    std::string record_type;  // "PxeBoot" | "HostOsModeChange" | "HostOsHandOff" | "Unknown"
+    uint32_t    timestamp = 0;
+    std::string raw_hex;
 };
+
+// Decode a raw SEL hex string (space-separated or plain).
+// Strips "5A 52 52 49..." OpenBMC prefix if present.
+// Returns ParsedSelRecord{record_type="Unknown"} on unrecognised payload.
+// Throws std::invalid_argument on malformed hex or insufficient bytes.
+ParsedSelRecord parse_sel_entry(const std::string& raw_hex);
 ```
+
+#### Byte-level decode rules
+
+| Condition | `record_type` |
+|---|---|
+| byte[0] == 0xCA | `"PxeBoot"` |
+| byte[0] == 0xD9 && byte[13] == 0x01 | `"HostOsModeChange"` |
+| byte[0] == 0xD9 && byte[13] == 0x02 | `"HostOsHandOff"` |
+| otherwise | `"Unknown"` |
+
+Timestamp = bytes[3..6] decoded as little-endian `uint32_t` (Unix epoch).
 
 ---
 
@@ -668,7 +700,27 @@ public:
         std::optional<std::string> apply_time        = std::nullopt
     );
     boost::asio::awaitable<RedfishResponse> simple_update_async(/* same params */);
+
+    // v0.2 — multipart HTTP push (FR7.5)
+    // Reads firmware_path from disk, POSTs to MultipartHttpPushUri (or HttpPushUri fallback)
+    // update_params is merged into the UpdateParameters JSON part
+    RedfishResponse push_firmware(
+        const std::string&    firmware_path,
+        const nlohmann::json& update_params = {}
+    );
 };
+
+### push_firmware flow (v0.2)
+
+```
+1. GET UpdateService resource → extract MultipartHttpPushUri (preferred) or HttpPushUri
+2. If neither present → throw RedfishProtocolError
+3. Read firmware file into memory buffer
+4. POST multipart/form-data to push URI:
+     Part 1 (name="UpdateParameters", Content-Type: application/json): update_params JSON
+     Part 2 (name="UpdateFile", Content-Type: application/octet-stream): firmware bytes
+5. Return RedfishResponse; task populated on 202
+```
 ```
 
 ---
@@ -736,58 +788,124 @@ is optional — the destructor handles it.
 
 ---
 
-## 16. Transport Layer — HttpClient
+## 16. Transport Layer — HttpClient (v0.2)
 
+### Header: `include/redfish_sdk/transport/http_client.hpp`
 ### Source: `src/transport/http_client.cpp`
-### Not in any public header.
 
-### Internal Interface
+v0.2 introduces a three-tier abstraction (NFR8.2 — injectable/mockable transport):
+
+```
+IHttpClient          ← abstract base (pure virtual)
+  ├── DefaultHttpClient   ← libcurl production impl, retry loop, multipart
+  └── MockHttpClient      ← test double: canned (method, path) → RawHttpResponse
+
+using HttpClient = DefaultHttpClient;   // legacy alias — keeps v0.1 code compiling
+```
+
+### IHttpClient (abstract base)
 
 ```cpp
-class HttpClient {
+class IHttpClient {
 public:
-    HttpClient(
-        std::string_view         base_url,
-        TLSConfig                tls_config,
-        TimeoutConfig            timeouts,
-        boost::asio::io_context& io_context
-    );
+    virtual ~IHttpClient() = default;
 
-    // Async (primary path) — Boost.Beast
-    boost::asio::awaitable<RawHttpResponse> request_async(
-        std::string_view                             method,
-        std::string_view                             path,
-        std::unordered_map<std::string, std::string> headers = {},
-        nlohmann::json                               body    = {}
-    );
+    virtual RawHttpResponse request(
+        const std::string&                        method,
+        const std::string&                        path,
+        const std::map<std::string, std::string>& headers = {},
+        const std::optional<std::string>&         body    = std::nullopt
+    ) = 0;
 
-    // Sync wrapper — drives io_context to completion; uses libcurl
-    RawHttpResponse request(
-        std::string_view                             method,
-        std::string_view                             path,
-        std::unordered_map<std::string, std::string> headers = {},
-        nlohmann::json                               body    = {}
-    );
+    // Multipart POST — fields are plain text, files are binary blobs (FR7.5)
+    virtual RawHttpResponse request_multipart(
+        const std::string&                                    path,
+        const std::map<std::string, std::string>&             headers,
+        const std::map<std::string, std::string>&             fields,
+        const std::map<std::string, std::vector<uint8_t>>&   files = {}
+    ) = 0;
+
+    virtual const std::string& base_url() const = 0;
 };
 ```
 
-### RawHttpResponse (Internal)
+### DefaultHttpClient
 
 ```cpp
-struct RawHttpResponse {
-    int                                          status_code;
-    std::unordered_map<std::string, std::string> headers;
-    std::string                                  body_text;
-    nlohmann::json                               body_json;   // null if not JSON
+class DefaultHttpClient : public IHttpClient {
+public:
+    DefaultHttpClient(
+        const std::string&      base_url,
+        const TLSConfig&        tls,
+        const TimeoutConfig&    timeouts,
+        const ConnectionConfig& config = {}   // supplies retry fields
+    );
+    // request() and request_multipart() implemented via libcurl + curl_mime
 };
 ```
 
-### Responsibilities
+#### Retry loop (FR1.8, FR1.9)
 
-- Attach standard Redfish headers to every request:
-  `OData-Version: 4.0`, `Content-Type: application/json`, `Accept: application/json`
-- Manage persistent connection via Boost.Beast / Boost.Asio
-- Auth header attachment is **not** done here — done by `AuthManager`
+```
+for attempt in 0 .. retry_count:
+    response = execute_once(method, path, ...)
+    if response.status_code in retry_status_codes:
+        sleep(retry_delay_sec); continue
+    return response
+  except RedfishTLSError:
+    raise immediately   # TLS errors never retried
+  except RedfishConnectionError:
+    sleep(retry_delay_sec); continue
+raise last_exception
+```
+
+#### HTTPS-always design
+
+The SDK always uses `https://`. Setting `verify_tls=false` only disables cert
+verification (`CURLOPT_SSL_VERIFYPEER=0`); it does **not** downgrade to HTTP.
+A non-fatal HTTP GET probe to `/redfish/v1` is performed before the main
+HTTPS connection for initial service discovery (e.g. simulators that expose
+plain HTTP on that path).
+
+### MockHttpClient (test double)
+
+```cpp
+class MockHttpClient : public IHttpClient {
+public:
+    explicit MockHttpClient(const std::string& base_url = "mock://localhost");
+
+    // Register a canned response keyed on (METHOD, path)
+    void register_response(
+        const std::string& method,
+        const std::string& path,
+        RawHttpResponse    response
+    );
+
+    // Inspect recorded calls for assertions
+    struct RecordedCall { std::string method; std::string path; };
+    const std::vector<RecordedCall>& recorded_calls() const;
+};
+```
+
+`request()` and `request_multipart()` look up `(METHOD, path)` in the
+registered map and return the canned response, or a synthetic 404 if not found.
+All calls are appended to `recorded_calls()` for verification in tests.
+
+### Logging
+
+All transport layer operations emit structured log messages via the internal
+logger (`src/internal/logger.hpp`). Log level is controlled by the
+`REDFISH_SDK_LOG_LEVEL` environment variable:
+
+| Value | Meaning |
+|---|---|
+| `DEBUG` | All HTTP attempts, retry loops, auth steps |
+| `INFO` | Connection established, auth mode |
+| `WARNING` | Connection attempt failed (retry pending) |
+| `ERROR` | All attempts exhausted |
+| `OFF` (default) | No output |
+
+Output goes to `std::clog`.
 
 ---
 
@@ -905,6 +1023,22 @@ struct Credentials {
 ```cpp
 enum class AuthMode { Session, Stateless };
 ```
+
+### ParsedSelRecord (v0.2)
+
+See §12 (LogServiceHandle) for full decode specification.
+
+```cpp
+struct ParsedSelRecord {
+    std::string record_type;  // "PxeBoot" | "HostOsModeChange" | "HostOsHandOff" | "Unknown"
+    uint32_t    timestamp = 0;
+    std::string raw_hex;
+};
+
+ParsedSelRecord parse_sel_entry(const std::string& raw_hex);
+```
+
+Defined in `include/redfish_sdk/models/redfish_types.hpp`.
 
 ### EndpointCapabilities
 
@@ -1128,3 +1262,4 @@ const char* redfish_last_error(redfish_ctx_t ctx);
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — C++ design |
+| 0.2 | 2026-03-06 | Hari | Retry/refresh (FR1.8–1.10); IHttpClient/MockHttpClient (NFR8.2); `push_firmware()` multipart (FR7.5); SEL parsing (FR8.2); env-controlled logging (NFR5.1); always-HTTPS transport |

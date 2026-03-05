@@ -4,12 +4,13 @@
 
 #include "redfish_sdk/services/log_service.hpp"
 #include "redfish_sdk/transport/auth.hpp"
+#include "../internal/logger.hpp"
 #include <nlohmann/json.hpp>
 
 namespace redfish {
 
 LogServiceHandle::LogServiceHandle(
-    HttpClient&                              http,
+    IHttpClient&                             http,
     const AuthState&                         auth_state,
     const std::map<std::string, std::string>& discovery_map
 )
@@ -17,6 +18,7 @@ LogServiceHandle::LogServiceHandle(
 {}
 
 RedfishResponse LogServiceHandle::list_services() {
+    REDFISH_LOG_DEBUG("log_service", "list_services");
     // Walk Systems and Managers looking for LogServices
     std::map<std::string, std::string> headers;
     AuthManager::attach_auth(auth_state_, headers);

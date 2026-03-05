@@ -24,10 +24,17 @@ int main(int argc, char* argv[]) {
             for (auto& m : svc.body.value("Members", nlohmann::json::array())) {
                 auto uri = m.value("@odata.id", "");
                 std::cout << "  LogService: " << uri << "\n";
-                auto entries = logs.list_entries(uri, 5);
-                if (entries.success)
-                    std::cout << "    Entries: "
-                              << entries.body.value("Members@odata.count", 0) << "\n";
+                try {
+                    auto entries = logs.list_entries(uri, 5);
+                    if (entries.success)
+                        std::cout << "    Entries: "
+                                  << entries.body.value("Members@odata.count", 0) << "\n";
+                    else
+                        std::cout << "    Entries: not available (HTTP "
+                                  << entries.status_code << ")\n";
+                } catch (const redfish::RedfishError& ex) {
+                    std::cout << "    Entries: skipped (" << ex.what() << ")\n";
+                }
             }
         }
 

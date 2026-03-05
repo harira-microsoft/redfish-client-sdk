@@ -36,6 +36,7 @@ target_include_directories(redfish_sdk
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CURL_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(redfish_sdk
@@ -63,6 +64,9 @@ set(SAMPLES
     08_log_service
     09_telemetry
     12_session_vs_stateless
+    13_retry_and_refresh
+    14_sel_parsing
+    15_multipart_upload
 )
 
 foreach(sample ${SAMPLES})

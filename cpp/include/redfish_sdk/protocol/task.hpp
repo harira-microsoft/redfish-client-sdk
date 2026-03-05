@@ -7,6 +7,7 @@
 
 #include "redfish_sdk/models/redfish_types.hpp"
 #include "redfish_sdk/protocol/response.hpp"
+#include "redfish_sdk/transport/http_client.hpp"
 #include <string>
 #include <functional>
 
@@ -30,7 +31,7 @@ struct RedfishTask {
 // Poll a task URI until completion or timeout.
 // Returns the final RedfishResponse of the task resource.
 RedfishResponse poll_task(
-    class HttpClient&        http,
+    IHttpClient&             http,
     const AuthState&         auth_state,
     const std::string&       task_uri,
     long                     poll_interval_sec,

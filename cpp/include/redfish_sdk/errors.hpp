@@ -38,4 +38,13 @@ struct RedfishTaskError : RedfishError {
     explicit RedfishTaskError(const std::string& msg) : RedfishError(msg) {}
 };
 
+// Base alias used by parse_sel_entry and other SDK-internal errors
+using RedfishSDKError = RedfishError;
+
+struct RedfishHTTPError : RedfishError {
+    int status_code;
+    explicit RedfishHTTPError(const std::string& msg, int code)
+        : RedfishError(msg), status_code(code) {}
+};
+
 } // namespace redfish

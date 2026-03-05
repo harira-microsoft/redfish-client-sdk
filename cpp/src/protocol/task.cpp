@@ -24,7 +24,7 @@ static TaskState parse_task_state(const std::string& s) {
 }
 
 RedfishResponse poll_task(
-    HttpClient&              http,
+    IHttpClient&             http,
     const AuthState&         auth_state,
     const std::string&       task_uri,
     long                     poll_interval_sec,

@@ -16,7 +16,7 @@ namespace redfish {
 class EventServiceHandle {
 public:
     EventServiceHandle(
-        HttpClient&                              http,
+        IHttpClient&                             http,
         const AuthState&                         auth_state,
         const std::map<std::string, std::string>& discovery_map
     );
@@ -39,7 +39,7 @@ public:
     RedfishResponse submit_test_event(const nlohmann::json& event_data = nullptr);
 
 private:
-    HttpClient&                              http_;
+    IHttpClient&                             http_;
     const AuthState&                         auth_state_;
     const std::map<std::string, std::string>& discovery_map_;
 

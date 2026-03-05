@@ -4,6 +4,7 @@
 
 #include "redfish_sdk/transport/auth.hpp"
 #include "redfish_sdk/errors.hpp"
+#include "../internal/logger.hpp"
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 
@@ -28,7 +29,7 @@ static std::string base64_encode(const std::string& input) {
 }
 
 AuthManager::AuthManager(
-    HttpClient&        http,
+    IHttpClient&       http,
     const Credentials& credentials,
     AuthMode           mode
 )
@@ -42,6 +43,7 @@ AuthState AuthManager::authenticate() {
 }
 
 AuthState AuthManager::session_auth() {
+    REDFISH_LOG_DEBUG("auth", "SESSION auth: POST /redfish/v1/SessionService/Sessions");
     nlohmann::json payload = {
         {"UserName", credentials_.username},
         {"Password", credentials_.password},
@@ -72,6 +74,7 @@ AuthState AuthManager::session_auth() {
 }
 
 AuthState AuthManager::stateless_auth() {
+    REDFISH_LOG_DEBUG("auth", "STATELESS auth: GET /redfish/v1");
     // Validate credentials with a lightweight GET
     std::string encoded = base64_encode(credentials_.username + ":" + credentials_.password);
     std::map<std::string, std::string> headers = {

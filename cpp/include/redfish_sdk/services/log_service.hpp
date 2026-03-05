@@ -15,7 +15,7 @@ namespace redfish {
 class LogServiceHandle {
 public:
     LogServiceHandle(
-        HttpClient&                              http,
+        IHttpClient&                             http,
         const AuthState&                         auth_state,
         const std::map<std::string, std::string>& discovery_map
     );
@@ -30,7 +30,7 @@ public:
     RedfishResponse clear_log(const std::string& log_uri);
 
 private:
-    HttpClient&                              http_;
+    IHttpClient&                             http_;
     const AuthState&                         auth_state_;
     const std::map<std::string, std::string>& discovery_map_;
 };
