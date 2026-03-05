@@ -24,6 +24,7 @@ set(SDK_SOURCES
     src/services/log_service.cpp
     src/services/telemetry_service.cpp
     src/services/update_service.cpp
+    src/events/listener.cpp
     src/context.cpp
     src/client.cpp
 )
@@ -61,8 +62,12 @@ set(SAMPLES
     03_get_resources
     04_direct_api
     05_event_subscribe
+    06_event_listener
+    07_event_monitor
     08_log_service
     09_telemetry
+    10_update_service
+    11_task_polling
     12_session_vs_stateless
     13_retry_and_refresh
     14_sel_parsing

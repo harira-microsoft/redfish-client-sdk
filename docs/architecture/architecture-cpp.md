@@ -364,17 +364,59 @@ itself. Expressed as a plain struct in the public header.
 ### Lifecycle
 
 ```cpp
-auto listener = RedfishEventListener{9090};
+auto listener = RedfishEventListener{9090, "0.0.0.0", "RSDK-Subs-01"};
 listener.use_context(ctx);
 listener.on_event([](const RedfishEvent& event) {
     // handle event
 });
-listener.start();   // non-blocking — starts internal io_context thread
+listener.start();   // non-blocking — starts internal POSIX-socket thread
 // ...
 listener.stop();    // stops internal thread gracefully
 ```
 
 RAII: `RedfishEventListener` destructor calls `stop()` automatically.
+
+### Implementation
+
+- Raw POSIX TCP socket (`socket` / `bind` / `listen` / `accept`)
+- One `std::thread` per accepted connection (short-lived HTTP request/response)
+- Supervisor `std::thread` loops on `accept()` until stop is requested
+- A `std::atomic<bool>` stop flag plus a self-pipe wake-up exits the accept loop
+  without a full `poll_interval` wait
+- Minimal HTTP/1.1 parser (reads until `\r\n\r\n`, then reads `Content-Length`
+  bytes for the body)
+- Always responds `HTTP/1.1 204 No Content\r\n\r\n`
+
+### Context Validation (FR5.3)
+
+If the `RedfishEventListener` was constructed with a non-empty `context` string,
+the `Context` field of each incoming event is compared.  If it does not match,
+the listener responds `204 No Content` **without** invoking any callbacks.
+
+### Latency Logging (FR5.3)
+
+After parsing the event's `EventTimestamp` ISO 8601 string, the listener
+computes the wall-clock delta from reception time and logs it at `DEBUG` level
+using the SDK's standard logging channel.
+
+### Per-IP Event Counter (FR5.3)
+
+A `std::map<std::string, uint32_t>` (protected by a `std::mutex`) maps source
+IP strings to cumulative event counts.  `get_ip_stats()` returns a copy.
+
+### Buffered Events (FR5.3)
+
+A bounded ring buffer (default capacity 200, configurable) stores the most
+recently received `RedfishEvent` objects.  `get_buffered_events()` returns a
+copy of the current buffer as `std::vector<RedfishEvent>`.
+
+A `GET` request to the listener's path returns the buffer as a JSON array.
+
+### MetricReport events
+
+Events with `EventFormatType == "MetricReport"` are detected by the presence
+of a `MetricReport` key in the JSON body.  They are dispatched to the same
+callback set; the `raw` JSON is preserved in `RedfishEvent.raw`.
 
 ---
 
@@ -433,3 +475,4 @@ cmake --build build
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — C++ architecture |
+| 0.3 | 2026-03-07 | Copilot | §9 EventListener implementation details added (POSIX socket, threading, context validation, latency logging, per-IP counter, buffered GET, MetricReport path) |

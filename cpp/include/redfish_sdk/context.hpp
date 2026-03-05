@@ -61,6 +61,7 @@ public:
     const DiscoveryResult&      discovery()    const { return discovery_; }
     const EndpointCapabilities& capabilities() const { return discovery_.capabilities; }
     const AuthState&            auth_state()   const { return auth_state_; }
+    IHttpClient&                http_client()        { return *http_; }
 
 private:
     std::unique_ptr<IHttpClient>             http_;

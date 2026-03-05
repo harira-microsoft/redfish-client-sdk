@@ -539,3 +539,4 @@ three language-specific architecture documents.
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — language-independent architecture |
+| 0.3 | 2026-03-07 | Copilot | FR5.1 extended subscription params; FR5.3 listener detail (context validation, latency logging, buffered events, per-IP counter); FR5.9 SubmitTestEvent; FR6.6 flat SEL format |

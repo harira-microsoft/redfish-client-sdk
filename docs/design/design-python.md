@@ -673,6 +673,8 @@ EventServiceHandle:
         event_types     : list[str] | None = None,
         registry_prefixes: list[str] | None = None,
         message_ids     : list[str] | None = None,
+        resource_types  : list[str] | None = None,     # FR5.1 v0.3
+        event_format_type: str | None = None,           # FR5.1 v0.3
         context         : str | None = None,
         protocol        : str = "Redfish",
         subscription_type: str = "RedfishEvent"
@@ -768,7 +770,10 @@ LogServiceHandle:
 
     # SEL binary record parsing — FR6.6 (module-level function, not a method)
     # parse_sel_entry(raw_hex: str) -> ParsedSelRecord
-    # Accepts raw hex or "Raw Data : Hex <hex>" (OpenBMC format)
+    # Accepts three formats:
+    #   1. Plain hex:                 "b70fcad117db6837010000002000FFFF"
+    #   2. OpenBMC prefix:            "Raw Data : Hex <hex>"  (from LogEntry.MessageArgs[0])
+    #   3. Flat generator prefix:     "Raw data: <hex>"       (from event generator SEL replay — FR6.6 v0.3)
     # Raises RedfishSDKError on invalid / too-short input
 ```
 
@@ -976,7 +981,9 @@ RedfishEventListener:
         port            : int,
         host            : str = "0.0.0.0",
         tls_cert        : str | None = None,    # path to cert file
-        tls_key         : str | None = None     # path to key file
+        tls_key         : str | None = None,    # path to key file
+        context         : str | None = None,    # expected subscription context — FR5.3
+        buffer_size     : int = 200             # max buffered events — FR5.3
     )
 
     # Wire to a context for message registry decoding (optional)
@@ -1013,6 +1020,12 @@ RedfishEventListener:
     # State
     is_running  : bool  (property)
     listen_url  : str   (property — e.g., "http://0.0.0.0:9090")
+
+    # Buffered events retrieval — FR5.3
+    get_buffered_events() -> list[RedfishEvent]
+
+    # Per-source-IP event counts — FR5.3
+    get_ip_stats() -> dict[str, int]
 ```
 
 ---
@@ -1023,16 +1036,32 @@ RedfishEventListener:
 BMC sends HTTP POST to listener port
     │
     ▼
-Listener receives request
+Listener receives request; records reception wall-clock time
     │
     ▼
 Parse Redfish event JSON payload
+    │
+    ├── Context validation (FR5.3):
+    │       if listener.context is set:
+    │           compare event["Context"] to listener.context
+    │           → mismatch: respond 204, stop processing
+    │
+    ├── Latency logging (FR5.3):
+    │       parse event["EventTimestamp"] (ISO 8601)
+    │       delta_ms = reception_time − event_time
+    │       log DEBUG "event latency %d ms" % delta_ms
+    │
+    ├── Per-IP counter (FR5.3):
+    │       ip_stats[source_ip] += 1
     │
     ├── If context is wired:
     │       resolve MessageId via MessageRegistry
     │
     ▼
 Construct RedfishEvent object
+    │
+    ▼
+Append to ring buffer (up to buffer_size events)
     │
     ▼
 Match against registered callbacks:
@@ -1502,3 +1531,4 @@ Caller          UpdateServiceHandle    TaskManager     BMC
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — Python design |
 | 0.2 | 2026-03-05 | Hari | Add retry (FR1.8/FR1.9), refresh_auth (FR1.10), HttpClient→ABC+DefaultHttpClient+MockHttpClient (NFR8.2), SEL parsing in LogService (FR6.6), multipart in UpdateService (FR7.5), logging instrumentation (NFR8.1) |
+| 0.3 | 2026-03-07 | Copilot | §11 subscribe() gains `resource_types` + `event_format_type` (FR5.1); §12 parse_sel_entry flat format (FR6.6); §15 EventListener interface + flow updated: `context` validation, latency logging, per-IP counter, ring buffer + `get_buffered_events()` / `get_ip_stats()` (FR5.3) |

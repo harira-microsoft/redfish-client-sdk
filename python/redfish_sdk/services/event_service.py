@@ -93,6 +93,8 @@ class EventServiceHandle:
         event_types: list[str] | None = None,
         registry_prefixes: list[str] | None = None,
         message_ids: list[str] | None = None,
+        resource_types: list[str] | None = None,
+        event_format_type: str | None = None,
         context: str | None = None,
         protocol: str = "Redfish",
         subscription_type: str = "RedfishEvent",
@@ -108,6 +110,10 @@ class EventServiceHandle:
             body["RegistryPrefixes"] = registry_prefixes
         if message_ids:
             body["MessageIds"] = message_ids
+        if resource_types:
+            body["ResourceTypes"] = resource_types
+        if event_format_type:
+            body["EventFormatType"] = event_format_type
         if context:
             body["Context"] = context
 

@@ -11,7 +11,24 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 namespace redfish {
+
+/**
+ * A single Redfish event record — parsed from a BMC push-mode delivery or
+ * an SSE stream payload.
+ */
+struct RedfishEvent {
+    std::string                event_id;
+    std::string                event_type;
+    std::string                event_timestamp;
+    std::string                message_id;
+    std::string                message;
+    std::string                severity;
+    std::optional<std::string> origin_of_condition;
+    nlohmann::json             raw;         ///< full raw JSON record
+};
 
 class EventServiceHandle {
 public:
@@ -28,6 +45,8 @@ public:
         const std::vector<std::string>& event_types         = {},
         const std::vector<std::string>& registry_prefixes   = {},
         const std::vector<std::string>& message_ids         = {},
+        const std::vector<std::string>& resource_types      = {},
+        const std::string&              event_format_type   = "",
         const std::string&              context             = "",
         const std::string&              protocol            = "Redfish",
         const std::string&              subscription_type   = "RedfishEvent"

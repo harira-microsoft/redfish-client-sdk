@@ -334,10 +334,10 @@ Expressed as a `pydantic` BaseModel for type safety and IDE support.
 The `RedfishEventListener` is a standalone class. Its lifecycle is:
 
 ```
-listener = RedfishEventListener(port=9090)
+listener = RedfishEventListener(port=9090, context="RSDK-Subs-01")
 listener.use_context(ctx)          # wire to context for registry decoding
 listener.on_event(callback_fn)     # register callback
-listener.start()                   # begin listening
+listener.start()                   # begin listening (background thread)
 ...
 listener.stop()                    # stop listening
 ```
@@ -346,13 +346,42 @@ listener.stop()                    # stop listening
 
 When the BMC POSTs an event to the listener:
 
-1. Listener receives the HTTP POST
+1. Listener receives the HTTP POST; records reception timestamp
 2. Parses the Redfish event payload
-3. Resolves `MessageId` via `MessageRegistry` if context is wired
-4. Constructs a `RedfishEvent` object
-5. Invokes all registered callbacks with the `RedfishEvent`
+3. **Context validation (FR5.3):** if a `context` string was set at construction,
+   the event's `Context` field is compared — on mismatch the listener responds
+   `204 No Content` without firing any callbacks
+4. **Latency logging:** the event's `EventTimestamp` field is compared to the
+   reception wall-clock time and the delta is logged at DEBUG level
+5. **Per-IP counter:** the source IP of the POST is counted in an in-memory dict
+6. Resolves `MessageId` via `MessageRegistry` if context is wired
+7. Constructs a `RedfishEvent` object
+8. Appends to the in-memory event buffer (bounded ring buffer, default 200 events)
+9. Invokes all registered callbacks with the `RedfishEvent`
+10. Responds `204 No Content` to the BMC
 
 Callbacks can be sync or async functions — the listener handles both.
+
+### GET endpoint (buffered event retrieval)
+
+`GET <listen_path>` returns a JSON array of the most recently buffered events.
+This provides a polling fallback for callers that cannot receive push deliveries
+from inside a callback context.
+
+### MetricReport events
+
+Events with `EventFormatType == "MetricReport"` are parsed along a separate
+path that extracts `MetricReport` fields.  They are delivered to the same
+callback set but the `RedfishEvent.raw` dict will contain the full report.
+
+### Implementation (Python)
+
+- `aiohttp` embedded server runs on a dedicated `asyncio` event loop spawned
+  on a background `threading.Thread`
+- Per-connection concurrency is handled by `aiohttp` natively
+- `start()` blocks until the server is accepting connections (up to 10 s)
+- `stop()` calls `loop.stop()` then joins the thread with a 5 s timeout
+- TLS: optional `ssl.SSLContext` loaded from `tls_cert` / `tls_key`
 
 ---
 
@@ -413,3 +442,4 @@ not because of any special simulator integration.
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — Python architecture |
+| 0.3 | 2026-03-07 | Copilot | §9 Event Listener expanded: context validation, latency logging, per-IP counter, buffered GET, MetricReport path, implementation notes |

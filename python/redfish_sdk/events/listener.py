@@ -5,7 +5,7 @@ push-mode event notifications from a BMC EventService subscription.
 Design ref: RSDK-DESIGN-001 §15
 
 Usage pattern:
-    listener = RedfishEventListener(port=9090)
+    listener = RedfishEventListener(port=9090, context="RSDK-Subs-01")
     listener.use_context(ctx)
 
     @listener.on_event
@@ -20,6 +20,8 @@ Usage pattern:
 from __future__ import annotations
 
 import asyncio
+import collections
+import datetime
 import json
 import logging
 import ssl
@@ -86,6 +88,13 @@ class RedfishEventListener:
         Path to the corresponding PEM private key file.
     path:
         URL path to register the event handler on (default ``"/events"``).
+    context:
+        Expected subscription context string (FR5.3).  When set, incoming
+        events whose ``Context`` field does not match are acknowledged with
+        ``204 No Content`` **without** firing any callbacks.
+    buffer_size:
+        Maximum number of most-recent events to keep in the in-memory ring
+        buffer (FR5.3).  ``get_buffered_events()`` returns a snapshot.
     """
 
     def __init__(
@@ -95,12 +104,16 @@ class RedfishEventListener:
         tls_cert: str | None = None,
         tls_key: str | None = None,
         path: str = "/events",
+        context: str | None = None,
+        buffer_size: int = 200,
     ) -> None:
         self._port = port
         self._host = host
         self._tls_cert = tls_cert
         self._tls_key = tls_key
         self._path = path if path.startswith("/") else f"/{path}"
+        self._expected_context = context
+        self._buffer_size = buffer_size
 
         self._ctx: ClientContext | None = None
 
@@ -115,6 +128,13 @@ class RedfishEventListener:
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
         self._running = False
+
+        # FR5.3 — ring buffer and per-IP counter (protected by a lock)
+        self._event_buffer: collections.deque[RedfishEvent] = collections.deque(
+            maxlen=buffer_size
+        )
+        self._ip_stats: dict[str, int] = {}
+        self._stats_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -286,6 +306,19 @@ class RedfishEventListener:
         scheme = "https" if (self._tls_cert and self._tls_key) else "http"
         return f"{scheme}://{self._host}:{self._port}{self._path}"
 
+    def get_buffered_events(self) -> list[RedfishEvent]:
+        """Return a snapshot of the most recently received events (FR5.3).
+
+        Thread-safe — returns a copy of the ring buffer.
+        """
+        with self._stats_lock:
+            return list(self._event_buffer)
+
+    def get_ip_stats(self) -> dict[str, int]:
+        """Return a copy of per-source-IP event counts (FR5.3)."""
+        with self._stats_lock:
+            return dict(self._ip_stats)
+
     # ------------------------------------------------------------------
     # Internal server management
     # ------------------------------------------------------------------
@@ -340,8 +373,25 @@ class RedfishEventListener:
     # ------------------------------------------------------------------
 
     async def _handle_health(self, request: web.Request) -> web.Response:  # noqa: ARG002
-        """Simple GET handler — useful for connectivity probes."""
-        return web.Response(status=200, text="Redfish Event Listener OK")
+        """GET handler — returns buffered events as JSON (FR5.3 polling fallback)."""
+        buffered = self.get_buffered_events()
+        payload = [
+            {
+                "EventId": ev.event_id,
+                "EventType": ev.event_type,
+                "EventTimestamp": ev.event_timestamp,
+                "MessageId": ev.message_id,
+                "Message": ev.message,
+                "Severity": ev.severity,
+                "OriginOfCondition": ev.origin_of_condition,
+            }
+            for ev in buffered
+        ]
+        return web.Response(
+            status=200,
+            content_type="application/json",
+            text=json.dumps(payload),
+        )
 
     async def _handle_post(self, request: web.Request) -> web.Response:
         """Handle an incoming event POST from the BMC.
@@ -352,6 +402,9 @@ class RedfishEventListener:
         Always responds ``204 No Content`` to acknowledge delivery, even on
         parse errors (to avoid the BMC retrying malformed payloads).
         """
+        reception_time = datetime.datetime.now(datetime.timezone.utc)
+        source_ip = request.remote or "unknown"
+
         try:
             body = await request.read()
             payload = json.loads(body)
@@ -359,7 +412,17 @@ class RedfishEventListener:
             _LOG.warning("Event listener received unparseable payload; ignoring")
             return web.Response(status=204)
 
-        events = self._parse_payload(payload)
+        # FR5.3 — context validation
+        if self._expected_context is not None:
+            event_context = payload.get("Context", "")
+            if event_context != self._expected_context:
+                _LOG.debug(
+                    "Event context mismatch: expected %r, got %r — ignoring",
+                    self._expected_context, event_context,
+                )
+                return web.Response(status=204)
+
+        events = self._parse_payload(payload, reception_time, source_ip)
 
         dispatch_tasks = []
         for event in events:
@@ -374,7 +437,12 @@ class RedfishEventListener:
     # Parsing helpers
     # ------------------------------------------------------------------
 
-    def _parse_payload(self, payload: dict[str, Any]) -> list[RedfishEvent]:
+    def _parse_payload(
+        self,
+        payload: dict[str, Any],
+        reception_time: datetime.datetime,
+        source_ip: str,
+    ) -> list[RedfishEvent]:
         """Extract :class:`RedfishEvent` objects from a raw BMC POST body."""
         records = payload.get("Events", [payload])
         events: list[RedfishEvent] = []
@@ -389,15 +457,33 @@ class RedfishEventListener:
             message = record.get("Message", "")
             severity = record.get("Severity", record.get("MessageSeverity", ""))
             origin_of_condition = record.get("OriginOfCondition", {})
+            event_timestamp = record.get("EventTimestamp", "")
 
             if isinstance(origin_of_condition, dict):
                 origin_uri = origin_of_condition.get("@odata.id", "")
             else:
                 origin_uri = str(origin_of_condition)
 
+            # FR5.3 — latency logging
+            if event_timestamp:
+                try:
+                    evt_dt = datetime.datetime.fromisoformat(
+                        event_timestamp.replace("Z", "+00:00")
+                    )
+                    delta_ms = int(
+                        (reception_time - evt_dt).total_seconds() * 1000
+                    )
+                    _LOG.debug(
+                        "Event latency: %d ms  (EventTimestamp=%s  MessageId=%s)",
+                        delta_ms, event_timestamp, message_id,
+                    )
+                except (ValueError, TypeError):
+                    pass  # non-parseable timestamp — skip latency calc
+
             # Build the event
             evt = RedfishEvent(
                 event_type=event_type,
+                event_timestamp=event_timestamp,
                 message_id=message_id,
                 message=message,
                 severity=severity,
@@ -405,6 +491,14 @@ class RedfishEventListener:
                 raw=record,
             )
             events.append(evt)
+
+        # FR5.3 — per-IP counter and ring buffer (batch update under one lock)
+        if events:
+            with self._stats_lock:
+                self._ip_stats[source_ip] = (
+                    self._ip_stats.get(source_ip, 0) + len(events)
+                )
+                self._event_buffer.extend(events)
 
         return events
 

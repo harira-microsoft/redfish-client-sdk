@@ -45,6 +45,8 @@ RedfishResponse EventServiceHandle::subscribe(
     const std::vector<std::string>& event_types,
     const std::vector<std::string>& registry_prefixes,
     const std::vector<std::string>& message_ids,
+    const std::vector<std::string>& resource_types,
+    const std::string&              event_format_type,
     const std::string&              context,
     const std::string&              protocol,
     const std::string&              subscription_type
@@ -57,6 +59,8 @@ RedfishResponse EventServiceHandle::subscribe(
     if (!event_types.empty())       body["EventTypes"]       = event_types;
     if (!registry_prefixes.empty()) body["RegistryPrefixes"] = registry_prefixes;
     if (!message_ids.empty())       body["MessageIds"]       = message_ids;
+    if (!resource_types.empty())    body["ResourceTypes"]    = resource_types;
+    if (!event_format_type.empty()) body["EventFormatType"]  = event_format_type;
     if (!context.empty())           body["Context"]          = context;
 
     std::map<std::string, std::string> headers;

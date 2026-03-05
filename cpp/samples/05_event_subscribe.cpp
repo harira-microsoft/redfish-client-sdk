@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
         // Subscribe
         auto sub = ev.subscribe("http://192.168.1.10:9090/events",
                                 {"Alert", "ResourceUpdated"},
-                                {}, {}, "CPP-SDK-Sample-05");
+                                {}, {}, {}, "", "CPP-SDK-Sample-05");
         std::string sub_uri;
         if (sub.success) {
             sub_uri = sub.location();

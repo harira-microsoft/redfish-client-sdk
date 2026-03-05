@@ -210,14 +210,15 @@ Phase 3 — Rust SDK          (After team is aligned to Rust)
 
 | ID | Priority | Requirement |
 |---|---|---|
-| FR5.1 | MUST | SDK shall provide **Event Subscription APIs** — register a new subscription on the BMC (`POST /redfish/v1/EventService/Subscriptions`) |
+| FR5.1 | MUST | SDK shall provide **Event Subscription APIs** — register a new subscription on the BMC (`POST /redfish/v1/EventService/Subscriptions`).  The subscription API shall accept `RegistryPrefixes`, `MessageIds`, `EventTypes`, `ResourceTypes`, and `EventFormatType` fields so that callers can match the subscription body required by real BMC endpoints |
 | FR5.2 | MUST | SDK shall provide APIs to **list, modify, and delete** existing event subscriptions |
-| FR5.3 | MUST | SDK shall provide a built-in **Redfish Event Listener** — an embedded HTTP(S) server capable of receiving push event deliveries from the BMC |
+| FR5.3 | MUST | SDK shall provide a built-in **Redfish Event Listener** — an embedded HTTP(S) server capable of receiving push event deliveries from the BMC.  The listener shall: (a) validate the `Context` field in incoming events against the subscription context if one was configured, returning `204 No Content` without firing callbacks on mismatch; (b) log the latency between the event's `EventTimestamp` and the reception time; (c) track a per-source-IP event counter; (d) buffer the most recent N events for retrieval via `GET` on the listener path |
 | FR5.4 | MUST | SDK shall provide **Event Monitoring APIs** — caller registers callbacks that are invoked when events arrive at the listener |
 | FR5.5 | MUST | SDK shall support **SSE (Server-Sent Events)** subscription type — open a streaming connection to the BMC and receive events as they are emitted |
 | FR5.6 | MUST | SDK shall support **Message Registry decoding** — resolve a `MessageId` to a human-readable message and arguments using the registry fetched from the BMC |
 | FR5.7 | MUST | Both **synchronous and asynchronous** modes shall be supported for event delivery and callback invocation |
 | FR5.8 | SHOULD | SDK shall support filtering of received events by `MessageId`, `RegistryPrefix`, `EventType`, and `OriginOfCondition` |
+| FR5.9 | SHOULD | SDK shall provide a **Submit Test Event API** — POST to `/redfish/v1/EventService/Actions/EventService.SubmitTestEvent` — to allow callers to inject a synthetic event for testing subscription pipelines without requiring live BMC activity |
 
 ---
 
@@ -230,7 +231,7 @@ Phase 3 — Rust SDK          (After team is aligned to Rust)
 | FR6.3 | MUST | SDK shall provide APIs to **clear logs** (`POST LogService/Actions/LogService.ClearLog`) where the BMC supports it |
 | FR6.4 | MUST | SDK shall support **multiple log services** on a single BMC — e.g., System EventLog, Manager logs, CPERLogs — accessible by URI or by discovery |
 | FR6.5 | SHOULD | SDK shall support **pagination** of log entry collections for BMCs that implement `Members@odata.nextLink` |
-| FR6.6 | COULD | SDK shall provide **typed binary log entry parsing** for known vendor formats (IPMI SEL records) — extracting record type, manufacturer ID, event ID, and platform-specific fields from raw hex data in `MessageArgs` |
+| FR6.6 | COULD | SDK shall provide **typed binary log entry parsing** for known vendor formats (IPMI SEL records) — extracting record type, manufacturer ID, event ID, and platform-specific fields from raw hex data.  Two input formats shall be accepted: (a) the OpenBMC-prefixed form `"Raw Data : Hex <hex>"` as found in `LogEntry.MessageArgs[0]`; (b) the flat generator form `"Raw data: <hex>"` (lowercase, no "Hex" keyword) as emitted by event generator tooling that replays `SELRawText.txt` files |
 
 ---
 
@@ -428,3 +429,4 @@ The following items are explicitly **not in scope** for any phase of this SDK:
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — requirements captured from design discussion |
 | 0.2 | 2026-03-05 | Copilot | Added FR1.8–FR1.10 (retry, auth refresh), FR6.6 (SEL parsing), FR7.5 (multipart upload), NFR8 (observability & testability) — informed by team Rust client analysis |
+| 0.3 | 2026-03-07 | Copilot | FR5.1 extended with `ResourceTypes` + `EventFormatType` subscription fields; FR5.3 extended with context validation, latency logging, per-IP event count, buffered GET; FR5.9 added (SubmitTestEvent); FR6.6 extended to cover flat generator SEL format (`"Raw data: <hex>"`) — all informed by EventMockupServerToolKit analysis |

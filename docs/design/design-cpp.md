@@ -504,6 +504,8 @@ public:
         std::vector<std::string> event_types        = {},
         std::vector<std::string> registry_prefixes  = {},
         std::vector<std::string> message_ids        = {},
+        std::vector<std::string> resource_types     = {},  // FR5.1 v0.3
+        std::string              event_format_type  = "",   // FR5.1 v0.3
         std::string              context            = "",
         std::string              protocol           = "Redfish",
         std::string              subscription_type  = "RedfishEvent"
@@ -727,7 +729,8 @@ public:
 
 ## 15. RedfishEventListener
 
-### Header: `include/redfish/event_listener.hpp`
+### Header: `include/redfish_sdk/event_listener.hpp`
+### Source: `src/events/listener.cpp`
 ### Namespace: `redfish`
 
 ### Public Interface
@@ -737,9 +740,9 @@ class RedfishEventListener {
 public:
     explicit RedfishEventListener(
         uint16_t         port,
-        std::string_view host     = "0.0.0.0",
-        std::string_view tls_cert = "",     // empty = plain HTTP
-        std::string_view tls_key  = ""
+        std::string_view host            = "0.0.0.0",
+        std::string_view expected_context = "",   // FR5.3 context validation
+        uint32_t         buffer_size     = 200    // FR5.3 ring buffer capacity
     );
 
     ~RedfishEventListener();    // RAII — calls stop() if running
@@ -769,22 +772,61 @@ public:
     );
 
     // Lifecycle
-    void start();   // non-blocking — starts internal io_context thread
+    void start();   // non-blocking — starts internal POSIX-socket thread
     void stop();    // graceful shutdown — blocks until thread exits
 
     bool        is_running()  const;
-    std::string listen_url()  const;    // e.g. "http://0.0.0.0:9090"
+    std::string listen_url()  const;    // e.g. "http://0.0.0.0:9090/events"
+
+    // FR5.3 — buffered event retrieval
+    std::vector<RedfishEvent> get_buffered_events() const;
+
+    // FR5.3 — per-source-IP event counts
+    std::map<std::string, uint32_t> get_ip_stats() const;
 };
 ```
 
 ### Internal Threading
 
-`RedfishEventListener` owns a `boost::asio::io_context` and a `std::thread`
-that runs it. This is the one place in the SDK that manages a thread — the
-listener must receive BMC POSTs independently of the caller's execution context.
+`RedfishEventListener` owns a raw POSIX TCP socket and two `std::thread`s:
 
-The destructor joins the thread before returning. Calling `stop()` explicitly
-is optional — the destructor handles it.
+1. **Supervisor thread** — loops on `accept()` until a stop flag is set.
+   Uses a self-pipe to wake the `select()`/`poll()` call so `stop()` returns
+   promptly without waiting for the next `accept()` timeout.
+2. **Per-connection thread** (short-lived) — spawned for each accepted connection;
+   reads the HTTP request, parses the JSON body, dispatches callbacks, writes
+   `204 No Content`, then exits.
+
+The destructor sets the stop flag and joins the supervisor thread before returning.
+
+### Context Validation (FR5.3)
+
+If `expected_context` is non-empty, the `Context` field of each incoming event
+JSON is compared.  On mismatch: respond `204 No Content` without invoking any
+callbacks and without appending to the ring buffer.
+
+### Latency Logging (FR5.3)
+
+After parsing `EventTimestamp` (ISO 8601), the supervisor thread computes the
+wall-clock delta from the reception time and logs it at `DEBUG` level.
+
+### Per-IP Counter (FR5.3)
+
+A `std::map<std::string, uint32_t>` protected by a `std::mutex` tracks
+cumulative event counts per source IP.  `get_ip_stats()` returns a copy.
+
+### Ring Buffer (FR5.3)
+
+A `std::deque<RedfishEvent>` capped at `buffer_size` stores the most recent
+events.  `get_buffered_events()` returns a copy.  A `GET` on the listen path
+serialises the buffer to JSON and responds `200 OK`.
+
+### SEL note
+
+Events with `MessageId` prefix `"OpenBMC"` and `Message` starting with
+`"Raw data: "` are recognised as flat-SEL events.  The listener passes them
+to callbacks as normal `RedfishEvent` objects; callers may further call
+`parse_sel_entry(event.message)` to decode the SEL bytes.
 
 ---
 
@@ -1263,3 +1305,4 @@ const char* redfish_last_error(redfish_ctx_t ctx);
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — C++ design |
 | 0.2 | 2026-03-06 | Hari | Retry/refresh (FR1.8–1.10); IHttpClient/MockHttpClient (NFR8.2); `push_firmware()` multipart (FR7.5); SEL parsing (FR8.2); env-controlled logging (NFR5.1); always-HTTPS transport |
+| 0.3 | 2026-03-07 | Copilot | §11 subscribe() gains `resource_types` + `event_format_type` (FR5.1); §15 RedfishEventListener redesigned — POSIX socket, context validation, latency logging, per-IP counter, ring buffer, buffered GET (FR5.3) |

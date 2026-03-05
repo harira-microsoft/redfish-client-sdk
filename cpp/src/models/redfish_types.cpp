@@ -19,11 +19,25 @@ constexpr uint8_t SEL_TYPE_HOST_OS = 0xD9;
 ParsedSelRecord parse_sel_entry(const std::string& raw_hex) {
     std::string hex = raw_hex;
 
-    // Strip optional OpenBMC prefix
+    // Strip OpenBMC prefix: "Raw Data : Hex <hex>"
     const std::string prefix(SEL_PREFIX);
     if (hex.size() >= prefix.size() &&
         hex.substr(0, prefix.size()) == prefix) {
         hex = hex.substr(prefix.size());
+    } else {
+        // Strip flat generator prefix: "Raw data: <hex>" (case-insensitive, FR6.6 v0.3)
+        // Handles "Raw data: 91 06 02 ..." emitted by SELRawText replay tools
+        std::string lower_hex = hex;
+        std::transform(lower_hex.begin(), lower_hex.end(), lower_hex.begin(),
+                        [](unsigned char c){ return static_cast<unsigned char>(std::tolower(c)); });
+        const std::string flat_prefix = "raw data:";
+        if (lower_hex.size() >= flat_prefix.size() &&
+            lower_hex.substr(0, flat_prefix.size()) == flat_prefix) {
+            hex = hex.substr(flat_prefix.size());
+            // trim leading whitespace
+            auto start = hex.find_first_not_of(" \t");
+            hex = (start == std::string::npos) ? "" : hex.substr(start);
+        }
     }
 
     // Strip spaces

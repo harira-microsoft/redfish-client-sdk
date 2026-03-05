@@ -69,14 +69,20 @@ def parse_sel_entry(raw_hex: str) -> ParsedSelRecord:
 
         # PXE boot start (OpenBMC)
         parse_sel_entry("b70fcad117db6837010000002000FFFF")
-        # Host OS mode change
+        # Host OS mode change (OpenBMC LogEntry.MessageArgs[0])
         parse_sel_entry("Raw Data : Hex e911d9df4cdc682000000401 01 01 0200")
+        # Flat generator format — from SELRawText.txt replay (FR6.6 v0.3)
+        parse_sel_entry("Raw data: 91 06 02 e9 6b e7 66 20 00 04 23 fe 6f 1d 0f 00")
     """
     from redfish_sdk.errors import RedfishSDKError
 
     cleaned = raw_hex.strip()
+    # Strip OpenBMC prefix: "Raw Data : Hex <hex>"
     if "Raw Data : Hex " in cleaned:
         cleaned = cleaned.split("Raw Data : Hex ")[-1].strip()
+    # Strip flat generator prefix: "Raw data: <hex>"  (FR6.6 v0.3)
+    elif cleaned.lower().startswith("raw data:"):
+        cleaned = cleaned[len("raw data:"):].strip()
     cleaned = cleaned.replace(" ", "").upper()
 
     if len(cleaned) < 32:
