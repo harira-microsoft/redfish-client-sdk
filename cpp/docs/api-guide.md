@@ -291,19 +291,44 @@ auto r = ev.submit_test_event(payload);
 ## LogService
 
 ```cpp
+#include "redfish_sdk/services/log_service.hpp"
+
 auto& log = ctx->logs();
 
 // List available log services under Systems/1 and Managers
 auto r = log.list_services();
 
-// List entries from a specific log service
-auto r = log.list_entries("/redfish/v1/Systems/1/LogServices/EventLog");
+// Single page — $top only
+redfish::LogQuery q;
+q.top = 10;
+auto r = log.list_entries("/redfish/v1/Systems/1/LogServices/EventLog", q);
 
-// With filters
-auto r = log.list_entries(
-    "/redfish/v1/Systems/1/LogServices/EventLog",
-    50,               // top — maximum entries (std::optional<int>)
-    "Severity eq 'Critical'"   // OData filter string
+// $skip + $top + $filter (order enforced: $skip → $top → $filter)
+redfish::LogQuery q2;
+q2.skip     = 30;
+q2.top      = 5;
+q2.severity = "Warning";
+auto r2 = log.list_entries(log_uri, q2);
+
+// MessageId filter
+redfish::LogQuery q3;
+q3.message_id = "OpenBMC.0.4.DiscreteEventAsserted";
+auto r3 = log.list_entries(log_uri, q3);
+
+// Raw OData $filter expression (escape-hatch — overrides severity/message_id)
+redfish::LogQuery q4;
+q4.odata_filter = "MessageId eq 'Base.1.8.Success'";
+auto r4 = log.list_entries(log_uri, q4);
+
+// Auto-pagination — callback returns false to stop early
+log.iter_entries(
+    log_uri,
+    [](const redfish::RedfishResponse& page) -> bool {
+        for (const auto& entry : page.body["Members"])
+            std::cout << entry["MessageId"] << "  " << entry["Severity"] << "\n";
+        return true;   // continue; return false to stop
+    },
+    redfish::LogQuery{.top = 50}
 );
 
 // Single entry
@@ -312,6 +337,18 @@ auto r = log.get_entry("/redfish/v1/Systems/1/LogServices/EventLog/Entries/1");
 // Clear a log
 auto r = log.clear_log("/redfish/v1/Systems/1/LogServices/EventLog");
 ```
+
+> **`redfish::LogQuery` fields** (all `std::optional`, default empty):
+>
+> | Field | Type | OData param | Notes |
+> |---|---|---|---|
+> | `top` | `optional<int>` | `$top` | Max entries per page |
+> | `skip` | `optional<int>` | `$skip` | Entries to skip (offset) |
+> | `severity` | `optional<string>` | `$filter=Severity eq '…'` | e.g. `"Warning"` |
+> | `message_id` | `optional<string>` | `$filter=MessageId eq '…'` | Full MessageId string |
+> | `odata_filter` | `optional<string>` | `$filter=…` | Raw expression; overrides severity/message_id |
+>
+> Parameter order always emitted as **`$skip → $top → $filter`** (required by OpenBMC).
 
 ---
 
@@ -592,7 +629,7 @@ cmake --build build --parallel
 | `03_get_resources` | Walk Systems / Managers / Chassis collections |
 | `04_direct_api` | `get` / `post` / `patch` / `delete_` |
 | `05_event_subscribe` | `subscribe`, `submit_test_event`, `delete_subscription` |
-| `08_log_service` | `list_services`, `list_entries`, `clear_log` |
+| `08_log_service` | `list_services`, `list_entries` (LogQuery: top/skip/severity/message_id/odata_filter), `iter_entries` (nextLink pagination), `clear_log` |
 | `09_telemetry` | `get_service_info`, `list_metric_reports` |
 | `12_session_vs_stateless` | Both auth modes, `allow_session_fallback` |
 
@@ -610,7 +647,7 @@ cmake --build build --parallel
 | `redfish_sdk/protocol/task.hpp` | `RedfishTask`, `TaskState`, `poll_task()` |
 | `redfish_sdk/discovery/discovery.hpp` | `Discovery`, `DiscoveryResult` |
 | `redfish_sdk/services/event_service.hpp` | `EventServiceHandle` |
-| `redfish_sdk/services/log_service.hpp` | `LogServiceHandle` |
+| `redfish_sdk/services/log_service.hpp` | `LogServiceHandle`, `LogQuery` |
 | `redfish_sdk/services/telemetry_service.hpp` | `TelemetryServiceHandle` |
 | `redfish_sdk/services/update_service.hpp` | `UpdateServiceHandle` |
 | `redfish_sdk/transport/http_client.hpp` | `HttpClient` (internal — rarely needed directly) |

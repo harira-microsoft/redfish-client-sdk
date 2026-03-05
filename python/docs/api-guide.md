@@ -215,36 +215,63 @@ r = await svc.list_subscriptions_async()
 ## LogService
 
 ```python
-svc = ctx.log_service
-
-# Find available log services
-r = svc.list_services()
-
-# Read entries from a specific log service
-r = svc.get_entries("/redfish/v1/Systems/1/LogServices/EventLog")
-
-# Filter entries
 from redfish_sdk.services.log_service import LogFilter
 
-r = svc.get_entries(
-    "/redfish/v1/Systems/1/LogServices/EventLog",
-    filter=LogFilter(
-        severity    = "Critical",
-        start_time  = "2026-01-01T00:00:00Z",
-        max_entries = 50,
-    ),
-)
+svc = ctx.log_service
+
+# Find all log services (walks Systems + Managers)
+r = svc.list_services()
+r = await svc.list_services_async()
+
+# Single page — $top only
+r = svc.get_entries(log_uri, filter=LogFilter(top=10))
+
+# $skip + $top  (order enforced internally: $skip → $top → $filter)
+r = svc.get_entries(log_uri, filter=LogFilter(skip=20, top=5))
+
+# $filter by Severity
+r = svc.get_entries(log_uri, filter=LogFilter(severity="Warning", top=10))
+
+# $filter by MessageId
+r = svc.get_entries(log_uri, filter=LogFilter(message_id="OpenBMC.0.4.DiscreteEventAsserted"))
+
+# Raw OData $filter expression (escape-hatch — overrides severity/message_id)
+r = svc.get_entries(log_uri, filter=LogFilter(odata_filter="MessageId eq 'Base.1.8.Success'"))
+
+# Compound: skip + top + filter
+r = svc.get_entries(log_uri, filter=LogFilter(skip=30, top=5, severity="Warning"))
+
+# Auto-pagination — follows Members@odata.nextLink automatically
+for page in svc.iter_entries(log_uri, filter=LogFilter(top=50), max_pages=10):
+    for entry in page.body.get("Members", []):
+        print(entry["MessageId"], entry["Severity"])
+
+# Async variants
+r = await svc.get_entries_async(log_uri, filter=LogFilter(skip=10, top=5))
+async for page in svc.iter_entries_async(log_uri, filter=LogFilter(top=50), max_pages=10):
+    for entry in page.body.get("Members", []):
+        print(entry["MessageId"], entry["Severity"])
 
 # Single entry
 r = svc.get_entry("/redfish/v1/Systems/1/LogServices/EventLog/Entries/1")
+r = await svc.get_entry_async(entry_uri)
 
 # Clear a log
 r = svc.clear_log("/redfish/v1/Systems/1/LogServices/EventLog")
-
-# Async variants
-r = await svc.list_services_async()
-r = await svc.get_entries_async(log_uri, filter=LogFilter(severity="Warning"))
+r = await svc.clear_log_async(log_uri)
 ```
+
+> **LogFilter fields** (all optional, all default `None`):
+>
+> | Field | OData param | Notes |
+> |---|---|---|
+> | `top` | `$top` | Max entries per page |
+> | `skip` | `$skip` | Entries to skip (offset) |
+> | `severity` | `$filter=Severity eq '…'` | e.g. `"Warning"`, `"Critical"` |
+> | `message_id` | `$filter=MessageId eq '…'` | Full MessageId string |
+> | `odata_filter` | `$filter=…` | Raw expression; overrides severity/message_id |
+>
+> Parameter order always emitted as **`$skip → $top → $filter`** (required by OpenBMC).
 
 ---
 
