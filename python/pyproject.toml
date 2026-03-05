@@ -8,10 +8,11 @@ version = "0.1.0"
 description = "A Python SDK for building clients against any Redfish-compliant endpoint"
 readme = "docs/api-guide.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { file = "../LICENSE" }
 authors = [
-    { name = "Hari Ramachandran", email = "harira@microsoft.com" }
+    { name = "Microsoft Corporation" }
 ]
+urls = { repository = "https://github.com/harira-microsoft/redfish-client-sdk" }
 keywords = ["redfish", "bmc", "ipmi", "hardware", "management"]
 classifiers = [
     "Development Status :: 3 - Alpha",

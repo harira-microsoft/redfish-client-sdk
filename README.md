@@ -1,5 +1,10 @@
 # Redfish Client SDK
 
+[![CI](https://github.com/harira-microsoft/redfish-client-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/harira-microsoft/redfish-client-sdk/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code of Conduct](https://img.shields.io/badge/code%20of%20conduct-Microsoft-blue)](CODE_OF_CONDUCT.md)
+[![Security](https://img.shields.io/badge/security-MSRC-red)](SECURITY.md)
+
 A multi-language SDK for building clients against any Redfish-compliant
 endpoint — real BMC hardware (AMD, iLO, iDRAC) or a simulator.
 
@@ -223,8 +228,8 @@ result.service_uri("EventService")       # /redfish/v1/EventService
 
 ## Testing Against the Simulator
 
-All samples target the [bmc-redfish-simulator](https://github.com/your-org/bmc-redfish-simulator)
-running locally on `127.0.0.1:8000`. No real hardware required to get
+All samples target the [bmc-redfish-simulator](https://github.com/DMTF/Redfish-Mockup-Server)
+or any compatible mockup server running locally on `127.0.0.1:8000`. No real hardware required to get
 started.
 
 ### Python

@@ -5,6 +5,9 @@ edition = "2021"
 rust-version = "1.75"
 description  = "Redfish Client SDK — idiomatic Rust"
 license      = "MIT"
+authors      = ["Microsoft Corporation"]
+repository   = "https://github.com/harira-microsoft/redfish-client-sdk"
+homepage     = "https://github.com/harira-microsoft/redfish-client-sdk"
 
 [dependencies]
 # HTTP
