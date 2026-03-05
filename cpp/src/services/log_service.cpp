@@ -55,19 +55,66 @@ RedfishResponse LogServiceHandle::list_services() {
 
 RedfishResponse LogServiceHandle::list_entries(
     const std::string& log_uri,
-    std::optional<int> top,
-    const std::string& filter
+    const LogQuery&    query
 ) {
     std::string uri = log_uri + "/Entries";
-    std::string query;
-    if (top.has_value())   query += "$top=" + std::to_string(*top);
-    if (!filter.empty())   query += (query.empty() ? "" : "&") + std::string("$filter=") + filter;
-    if (!query.empty())    uri += "?" + query;
+    auto qs = build_query_string(query);
+    if (!qs.empty()) uri += "?" + qs;
 
     std::map<std::string, std::string> headers;
     AuthManager::attach_auth(auth_state_, headers);
     auto raw = http_.request("GET", uri, headers);
     return build_response(raw.status_code, raw.headers, raw.body_text);
+}
+
+void LogServiceHandle::iter_entries(
+    const std::string&                          log_uri,
+    std::function<bool(const RedfishResponse&)> on_page,
+    const LogQuery&                             query
+) {
+    std::map<std::string, std::string> headers;
+    AuthManager::attach_auth(auth_state_, headers);
+
+    // First page: build URI from log_uri + /Entries + query string
+    std::string next_uri = log_uri + "/Entries";
+    auto qs = build_query_string(query);
+    if (!qs.empty()) next_uri += "?" + qs;
+
+    while (!next_uri.empty()) {
+        auto raw  = http_.request("GET", next_uri, headers);
+        auto resp = build_response(raw.status_code, raw.headers, raw.body_text);
+
+        // Deliver page to caller; stop if callback returns false
+        if (!on_page(resp)) break;
+
+        // Follow nextLink if present, otherwise stop
+        next_uri.clear();
+        if (resp.success && resp.body.is_object()) {
+            auto it = resp.body.find("Members@odata.nextLink");
+            if (it != resp.body.end() && it->is_string())
+                next_uri = it->get<std::string>();
+        }
+    }
+}
+
+// static
+std::string LogServiceHandle::build_query_string(const LogQuery& q) {
+    // Order: $skip → $top → $filter  (FR6.7 / OpenBMC requirement)
+    std::string out;
+    auto append = [&](const std::string& part) {
+        if (!out.empty()) out += '&';
+        out += part;
+    };
+    if (q.skip.has_value())   append("$skip="  + std::to_string(*q.skip));
+    if (q.top.has_value())    append("$top="   + std::to_string(*q.top));
+    if (q.odata_filter.has_value()) {
+        append("$filter=" + *q.odata_filter);
+    } else if (q.severity.has_value()) {
+        append("$filter=Severity eq '" + *q.severity + "'");
+    } else if (q.message_id.has_value()) {
+        append("$filter=MessageId eq '" + *q.message_id + "'");
+    }
+    return out;
 }
 
 RedfishResponse LogServiceHandle::get_entry(const std::string& entry_uri) {

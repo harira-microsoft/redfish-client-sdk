@@ -561,6 +561,24 @@ struct RedfishEvent {
 ### Namespace: `redfish`
 ### Accessed via: `ctx.log_service()`
 
+### LogQuery (FR6.2 / FR6.7 / FR6.8 — v0.4)
+
+A value type that encapsulates all OData query parameters for log entry
+retrieval.  The SDK builds the query string internally in the order required
+by OpenBMC implementations: **`$skip` → `$top` → `$filter`**.
+
+```cpp
+// Typed OData query parameters for log entry retrieval.
+// Query string is built in BMC-required order: $skip → $top → $filter
+struct LogQuery {
+    std::optional<int>         top;           // $top — max entries returned
+    std::optional<int>         skip;          // $skip — first N entries to skip
+    std::optional<std::string> severity;      // $filter=Severity eq '<value>'
+    std::optional<std::string> message_id;    // $filter=MessageId eq '<value>'
+    std::optional<std::string> odata_filter;  // raw $filter (overrides severity/message_id)
+};
+```
+
 ### Public Interface
 
 ```cpp
@@ -568,11 +586,19 @@ class LogServiceHandle {
 public:
     RedfishResponse list_services();
 
-    // list_entries: appends /Entries to log_uri; optional $top and $filter OData params
+    // Fetch one page of entries.
+    // Query string is built in required OData order: $skip → $top → $filter
     RedfishResponse list_entries(
-        const std::string&         log_uri,
-        std::optional<int>         top    = std::nullopt,
-        const std::string&         filter = ""
+        const std::string& log_uri,
+        const LogQuery&    query = {}
+    );
+
+    // Follow Members@odata.nextLink until exhausted or on_page returns false.
+    // on_page receives one full RedfishResponse per page.
+    void iter_entries(
+        const std::string&                             log_uri,
+        std::function<bool(const RedfishResponse&)>    on_page,
+        const LogQuery&                                query = {}
     );
 
     RedfishResponse get_entry(const std::string& entry_uri);
@@ -1306,3 +1332,4 @@ const char* redfish_last_error(redfish_ctx_t ctx);
 | 0.1 | 2026-03-04 | Hari | Initial draft — C++ design |
 | 0.2 | 2026-03-06 | Hari | Retry/refresh (FR1.8–1.10); IHttpClient/MockHttpClient (NFR8.2); `push_firmware()` multipart (FR7.5); SEL parsing (FR8.2); env-controlled logging (NFR5.1); always-HTTPS transport |
 | 0.3 | 2026-03-07 | Copilot | §11 subscribe() gains `resource_types` + `event_format_type` (FR5.1); §15 RedfishEventListener redesigned — POSIX socket, context validation, latency logging, per-IP counter, ring buffer, buffered GET (FR5.3) |
+| 0.4 | 2026-03-05 | Copilot | §12 `LogQuery` struct added; `list_entries()` updated to accept `LogQuery`; `iter_entries()` added for nextLink auto-pagination (FR6.8); OData ordering enforcement documented (FR6.7) |

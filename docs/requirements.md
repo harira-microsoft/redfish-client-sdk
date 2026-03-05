@@ -227,11 +227,13 @@ Phase 3 — Rust SDK          (After team is aligned to Rust)
 | ID | Priority | Requirement |
 |---|---|---|
 | FR6.1 | MUST | SDK shall provide APIs to **read log entries** from any `LogService` resource on the BMC |
-| FR6.2 | MUST | SDK shall support **filtering** of log entries by severity, time range, and message ID |
+| FR6.2 | MUST | SDK shall support **OData query parameters** for log entry retrieval: `$top` (limit count), `$skip` (offset), and `$filter=<field> eq '<value>'` (equality filter on any filterable property — e.g. `Severity`, `MessageId`) |
 | FR6.3 | MUST | SDK shall provide APIs to **clear logs** (`POST LogService/Actions/LogService.ClearLog`) where the BMC supports it |
 | FR6.4 | MUST | SDK shall support **multiple log services** on a single BMC — e.g., System EventLog, Manager logs, CPERLogs — accessible by URI or by discovery |
-| FR6.5 | SHOULD | SDK shall support **pagination** of log entry collections for BMCs that implement `Members@odata.nextLink` |
+| FR6.5 | SHOULD | SDK shall surface the `Members@odata.nextLink` cursor from paginated responses and provide a **page-iterator API** that follows `nextLink` automatically, enabling full log scans without caller-managed `$skip` tracking |
 | FR6.6 | COULD | SDK shall provide **typed binary log entry parsing** for known vendor formats (IPMI SEL records) — extracting record type, manufacturer ID, event ID, and platform-specific fields from raw hex data.  Two input formats shall be accepted: (a) the OpenBMC-prefixed form `"Raw Data : Hex <hex>"` as found in `LogEntry.MessageArgs[0]`; (b) the flat generator form `"Raw data: <hex>"` (lowercase, no "Hex" keyword) as emitted by event generator tooling that replays `SELRawText.txt` files |
+| FR6.7 | MUST | When combining OData query parameters, the SDK shall enforce the BMC-required ordering: **`$skip` first, then `$top`, then `$filter`** — as required by OpenBMC implementations and validated in field testing |
+| FR6.8 | SHOULD | SDK shall provide an **auto-pagination iterator** that follows `Members@odata.nextLink` transparently, yielding pages of entries without requiring the caller to manage `$skip` offsets manually |
 
 ---
 
@@ -279,7 +281,7 @@ Phase 3 — Rust SDK          (After team is aligned to Rust)
 | `05_event_subscribe` | Register an event subscription on the BMC |
 | `06_event_listener` | Start the event listener, receive and print events |
 | `07_event_monitor` | Subscribe + listen + callback in one integrated flow |
-| `08_log_service` | Query logs, filter by severity, clear logs |
+| `08_log_service` | Query logs with `$top`/`$skip`/`$filter`, follow `nextLink` pagination, clear logs |
 | `09_telemetry` | Query metric definitions and read metric reports |
 | `10_update_service` | Query firmware inventory, trigger SimpleUpdate |
 | `11_task_polling` | Async task monitor — wait for long-running operation |
@@ -430,3 +432,4 @@ The following items are explicitly **not in scope** for any phase of this SDK:
 | 0.1 | 2026-03-04 | Hari | Initial draft — requirements captured from design discussion |
 | 0.2 | 2026-03-05 | Copilot | Added FR1.8–FR1.10 (retry, auth refresh), FR6.6 (SEL parsing), FR7.5 (multipart upload), NFR8 (observability & testability) — informed by team Rust client analysis |
 | 0.3 | 2026-03-07 | Copilot | FR5.1 extended with `ResourceTypes` + `EventFormatType` subscription fields; FR5.3 extended with context validation, latency logging, per-IP event count, buffered GET; FR5.9 added (SubmitTestEvent); FR6.6 extended to cover flat generator SEL format (`"Raw data: <hex>"`) — all informed by EventMockupServerToolKit analysis |
+| 0.4 | 2026-03-05 | Copilot | FR6.2 extended with explicit `$top`/`$skip`/`$filter` OData params; FR6.5 updated with nextLink iterator detail; FR6.7 added (OData param ordering enforcement); FR6.8 added (auto-pagination iterator) — informed by RedfishLoggingTechniques.md analysis |

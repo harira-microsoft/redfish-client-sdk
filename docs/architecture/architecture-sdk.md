@@ -140,6 +140,11 @@ Each handle:
 - Exposes intent-driven APIs for its specific service domain
 - Returns `RedfishResponse` for all operations
 
+The **Log Service Handle** additionally provides:
+- A typed `LogQuery` parameter object encapsulating `$top`, `$skip`, and `$filter` fields
+- Enforced OData query-string ordering: `$skip` → `$top` → `$filter` (required by OpenBMC implementations — FR6.7)
+- A page-iterator that follows `Members@odata.nextLink` automatically until all pages are consumed (FR6.8)
+
 ---
 
 ### Direct / Raw Access
@@ -540,3 +545,4 @@ three language-specific architecture documents.
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — language-independent architecture |
 | 0.3 | 2026-03-07 | Copilot | FR5.1 extended subscription params; FR5.3 listener detail (context validation, latency logging, buffered events, per-IP counter); FR5.9 SubmitTestEvent; FR6.6 flat SEL format |
+| 0.4 | 2026-03-05 | Copilot | §4 LogService Handle responsibilities extended: `LogQuery` typed parameter, OData ordering enforcement (`$skip` → `$top` → `$filter`), `iter_entries` nextLink auto-pagination |

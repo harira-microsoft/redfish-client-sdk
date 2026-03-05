@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -155,11 +156,19 @@ _DEFAULT_SERVICE_PATH = "/redfish/v1/Systems/1/LogServices"
 
 @dataclass
 class LogFilter:
-    severity: str | None = None
-    start_time: str | None = None
-    end_time: str | None = None
-    message_id: str | None = None
-    top: int | None = None
+    """OData query parameters for log entry retrieval.
+
+    Parameters are applied in the BMC-required order:
+    ``$skip`` → ``$top`` → ``$filter``.
+
+    ``odata_filter`` is an escape-hatch for any raw OData expression.
+    It overrides ``severity`` and ``message_id`` if set.
+    """
+    top:          int | None = None   # $top  — max entries to return
+    skip:         int | None = None   # $skip — first N entries to skip (FR6.8)
+    severity:     str | None = None   # $filter=Severity eq '<value>'
+    message_id:   str | None = None   # $filter=MessageId eq '<value>'
+    odata_filter: str | None = None   # raw $filter (overrides severity / message_id)
 
 
 class LogServiceHandle:
@@ -270,13 +279,101 @@ class LogServiceHandle:
     def clear_log(self, log_service_uri: str) -> RedfishResponse:
         return asyncio.run(self.clear_log_async(log_service_uri))
 
+    # ------------------------------------------------------------------
+    # Pagination iterator (FR6.5 / FR6.8)
+    # ------------------------------------------------------------------
+
+    async def iter_entries_async(
+        self,
+        log_service_uri: str,
+        filter: LogFilter | None = None,
+        max_pages: int | None = None,
+    ) -> AsyncIterator[RedfishResponse]:
+        """Async generator that follows ``Members@odata.nextLink`` across pages.
+
+        Yields one :class:`RedfishResponse` per page.  Stops when
+        ``nextLink`` is absent or *max_pages* is reached.
+        """
+        page = 0
+        # Build URI for first page (honour $skip / $top / $filter from filter)
+        entries_uri: str | None = f"{log_service_uri.rstrip('/')}/Entries"
+        query_params = _build_filter_params(filter)
+        if query_params:
+            entries_uri = f"{entries_uri}?{query_params}"
+
+        headers = AuthManager.attach_auth(self._auth_state, {})
+
+        while entries_uri is not None:
+            if max_pages is not None and page >= max_pages:
+                break
+            raw = await self._http.request_async("GET", entries_uri, headers=headers)
+            resp = build_response(raw.status_code, raw.headers, raw.body_json, raw.body_text)
+            yield resp
+            page += 1
+            if not resp.success or not isinstance(resp.body, dict):
+                break
+            # Follow nextLink if present
+            next_link = resp.body.get("Members@odata.nextLink")
+            entries_uri = next_link if next_link else None
+
+    def iter_entries(
+        self,
+        log_service_uri: str,
+        filter: LogFilter | None = None,
+        max_pages: int | None = None,
+    ) -> Iterator[RedfishResponse]:
+        """Sync wrapper around :meth:`iter_entries_async`."""
+        import queue as _queue
+        import threading as _threading
+
+        q: _queue.Queue[RedfishResponse | BaseException | None] = _queue.Queue()
+
+        async def _producer() -> None:
+            try:
+                async for page in self.iter_entries_async(
+                    log_service_uri, filter, max_pages
+                ):
+                    q.put(page)
+            except BaseException as exc:  # noqa: BLE001
+                q.put(exc)
+            finally:
+                q.put(None)  # sentinel
+
+        def _run() -> None:
+            asyncio.run(_producer())
+
+        t = _threading.Thread(target=_run, daemon=True)
+        t.start()
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            if isinstance(item, BaseException):
+                raise item
+            yield item
+        t.join()
+
 
 def _build_filter_params(filter: LogFilter | None) -> str:
+    """Build an OData query string from a *LogFilter*.
+
+    Order is always ``$skip`` → ``$top`` → ``$filter`` per FR6.7 /
+    OpenBMC implementation requirements.
+    """
     if not filter:
         return ""
-    parts = []
-    if filter.severity:
-        parts.append(f"$filter=Severity eq '{filter.severity}'")
-    if filter.top:
+    parts: list[str] = []
+    # $skip first
+    if filter.skip is not None:
+        parts.append(f"$skip={filter.skip}")
+    # $top second
+    if filter.top is not None:
         parts.append(f"$top={filter.top}")
+    # $filter last
+    if filter.odata_filter:
+        parts.append(f"$filter={filter.odata_filter}")
+    elif filter.severity:
+        parts.append(f"$filter=Severity eq '{filter.severity}'")
+    elif filter.message_id:
+        parts.append(f"$filter=MessageId eq '{filter.message_id}'")
     return "&".join(parts)

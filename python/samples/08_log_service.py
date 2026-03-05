@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Sample 08 — LogService: list services, fetch entries, clear log.
+"""Sample 08 — LogService: query with $top/$skip/$filter, pagination.
 
 Demonstrates:
   - ctx.logs.list_services_async()
-  - ctx.logs.get_entries_async() with pagination / filtering
+  - LogFilter with top, skip, severity, message_id (OData order enforced)
+  - ctx.logs.get_entries_async() — single page
+  - ctx.logs.iter_entries_async() — follow Members@odata.nextLink
   - ctx.logs.get_entry_async()
   - ctx.logs.clear_log_async()
-  - LogFilter for severity, date-range, $top
 
 Usage:
     python 08_log_service.py [--host HOST] [--port PORT]
@@ -36,6 +37,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-tls-verify", action="store_true")
     p.add_argument("--max-entries", type=int, default=5, help="Max entries to display per log")
     return p.parse_args()
+
+
+def _print_entry(entry: dict) -> None:
+    eid      = entry.get("Id", "?")
+    severity = entry.get("Severity", entry.get("MessageSeverity", "?"))
+    msg      = entry.get("Message", "")[:72]
+    created  = entry.get("Created", "")[:19]
+    print(f"      [{eid:>10}] {severity:<12} {created}  {msg}")
 
 
 async def main() -> None:

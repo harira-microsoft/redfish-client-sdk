@@ -200,6 +200,13 @@ accessed.
 Each handle exposes intent-driven methods that return `RedfishResponse`.
 All methods available in both sync and async variants.
 
+The **Log Service Handle** (`log_service`) accepts a `LogFilter` dataclass
+carrying `top`, `skip`, `severity`, `message_id`, and `odata_filter` fields.
+The handle builds the OData query string in the required order
+(`$skip` → `$top` → `$filter`) and provides `iter_entries_async()` —
+an async generator that follows `Members@odata.nextLink` across pages
+without caller-managed offset tracking.
+
 ---
 
 ### Protocol Layer → `protocol/`
@@ -443,3 +450,4 @@ not because of any special simulator integration.
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — Python architecture |
 | 0.3 | 2026-03-07 | Copilot | §9 Event Listener expanded: context validation, latency logging, per-IP counter, buffered GET, MetricReport path, implementation notes |
+| 0.4 | 2026-03-05 | Copilot | §5 Service Handles: `LogFilter` extended with `skip` field; `iter_entries_async()` added for nextLink auto-pagination; OData ordering rule documented |

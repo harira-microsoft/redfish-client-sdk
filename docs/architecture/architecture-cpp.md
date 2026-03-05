@@ -212,6 +212,14 @@ They are cheap to create and do not need to be stored by the caller.
 
 All methods on handles exist in sync and async variants.
 
+The **LogServiceHandle** accepts a `LogQuery` struct (defined in
+`include/redfish_sdk/services/log_service.hpp`) encapsulating `top`,
+`skip`, `severity`, `message_id`, and an optional raw `odata_filter` string.
+`list_entries()` builds the query string in the required order
+(`$skip` → `$top` → `$filter`).  `iter_entries()` accepts a page-callback
+and follows `Members@odata.nextLink` until all pages are consumed or
+the callback returns `false`.
+
 ---
 
 ### Protocol Layer → `src/protocol/`
@@ -476,3 +484,4 @@ cmake --build build
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — C++ architecture |
 | 0.3 | 2026-03-07 | Copilot | §9 EventListener implementation details added (POSIX socket, threading, context validation, latency logging, per-IP counter, buffered GET, MetricReport path) |
+| 0.4 | 2026-03-05 | Copilot | §5 Service Handles: `LogServiceHandle` `LogQuery` struct added; `iter_entries()` nextLink auto-pagination added; OData ordering enforcement noted |

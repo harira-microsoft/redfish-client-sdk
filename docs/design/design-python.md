@@ -768,6 +768,19 @@ LogServiceHandle:
     clear_log(log_service_uri: str) -> RedfishResponse
     clear_log_async(log_service_uri: str) -> Awaitable[RedfishResponse]
 
+    # Auto-pagination iterator — follows Members@odata.nextLink (FR6.5 / FR6.8)
+    # Yields one RedfishResponse per page; stops when nextLink is absent
+    iter_entries_async(
+        log_service_uri : str,
+        filter          : LogFilter | None = None,
+        max_pages       : int | None = None
+    ) -> AsyncIterator[RedfishResponse]
+    iter_entries(
+        log_service_uri : str,
+        filter          : LogFilter | None = None,
+        max_pages       : int | None = None
+    ) -> Iterator[RedfishResponse]
+
     # SEL binary record parsing — FR6.6 (module-level function, not a method)
     # parse_sel_entry(raw_hex: str) -> ParsedSelRecord
     # Accepts three formats:
@@ -810,11 +823,22 @@ SEL record type byte decoding (OpenBMC OEM timestamped events):
 
 ```
 LogFilter:
-    severity        : str | None         # "OK" | "Warning" | "Critical"
-    start_time      : str | None         # ISO 8601 timestamp
-    end_time        : str | None         # ISO 8601 timestamp
-    message_id      : str | None         # filter by MessageId prefix
-    max_entries     : int | None         # limit result count
+    top             : int | None         # $top — max entries to return
+    skip            : int | None         # $skip — first N entries to skip (FR6.8 v0.4)
+    severity        : str | None         # $filter=Severity eq '<value>'
+    message_id      : str | None         # $filter=MessageId eq '<value>'
+    odata_filter    : str | None         # raw $filter expression (overrides severity/message_id)
+```
+
+### OData Query Ordering (FR6.7)
+
+When building the query string, parameters are always emitted in the order
+required by OpenBMC: **`$skip` → `$top` → `$filter`**.  Callers do not need
+to know this — the SDK enforces it internally in `_build_filter_params()`.
+
+```
+Example — skip 30, top 5, filter by MessageId:
+  ?$skip=30&$top=5&$filter=MessageId eq 'OpenBMC.0.4.DiscreteEventAsserted'
 ```
 
 ---
@@ -1532,3 +1556,4 @@ Caller          UpdateServiceHandle    TaskManager     BMC
 | 0.1 | 2026-03-04 | Hari | Initial draft — Python design |
 | 0.2 | 2026-03-05 | Hari | Add retry (FR1.8/FR1.9), refresh_auth (FR1.10), HttpClient→ABC+DefaultHttpClient+MockHttpClient (NFR8.2), SEL parsing in LogService (FR6.6), multipart in UpdateService (FR7.5), logging instrumentation (NFR8.1) |
 | 0.3 | 2026-03-07 | Copilot | §11 subscribe() gains `resource_types` + `event_format_type` (FR5.1); §12 parse_sel_entry flat format (FR6.6); §15 EventListener interface + flow updated: `context` validation, latency logging, per-IP counter, ring buffer + `get_buffered_events()` / `get_ip_stats()` (FR5.3) |
+| 0.4 | 2026-03-05 | Copilot | §12 `LogFilter` extended: `skip` field added, `max_entries` renamed to `top`, `odata_filter` escape-hatch added; `iter_entries`/`iter_entries_async()` added (FR6.8); OData ordering rule documented (FR6.7) |
