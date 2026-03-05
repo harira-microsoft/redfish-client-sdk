@@ -10,7 +10,7 @@ readme = "docs/api-guide.md"
 requires-python = ">=3.10"
 license = { file = "../LICENSE" }
 authors = [
-    { name = "Microsoft Corporation" }
+    { name = "Hari Ramachandran" }
 ]
 urls = { repository = "https://github.com/harira-microsoft/redfish-client-sdk" }
 keywords = ["redfish", "bmc", "ipmi", "hardware", "management"]
