@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# C++
+build/
+cmake-build-*/
+*.o
+*.a
+*.so
+*.dll
+*.exe
+CMakeCache.txt
+CMakeFiles/
+
+# Rust
+rust/target/
+Cargo.lock
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
