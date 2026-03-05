@@ -183,7 +183,7 @@ def main():
     print()
     print(SEP2)
     print("  Redfish SDK  —  Performance Comparison:  Python  vs  C++  vs  Rust")
-    print(f"  Simulator: https://127.0.0.1:8000  (Ares_AI_Blade mockup)   Runs per sample: {args.runs}")
+    print(f"  Simulator: https://127.0.0.1:8000   Runs per sample: {args.runs}")
     print(SEP2)
 
     # Wall-time table

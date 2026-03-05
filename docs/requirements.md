@@ -66,9 +66,8 @@ implementing protocol-level concerns.
 ### Primary Integration Target (Development & Testing)
 
 The SDK shall be developed and validated against the
-**bmc-redfish-simulator** (`/home/hari/Tools/bmc-redfish-simulator`)
-and the **AMD Platform mockup** (`/home/hari/mockup/AMD_Platform_v3`).
-However, the SDK shall make no assumptions specific to this simulator —
+**bmc-redfish-simulator** with any compliant Redfish mockup dataset.
+The SDK shall make no assumptions specific to any particular simulator or mockup —
 it shall work against any compliant Redfish endpoint.
 
 ---

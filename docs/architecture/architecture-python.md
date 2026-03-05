@@ -433,8 +433,6 @@ The simulator provides:
 - Session and Basic auth support
 - EventService with subscription and SSE support
 - LogService, TelemetryService, and UpdateService endpoints
-- The AMD Platform mockup (`/home/hari/mockup/AMD_Platform_v3`)
-
 All 12 sample clients are executable against the simulator using the
 default `--host 127.0.0.1 --port 8000` arguments.
 

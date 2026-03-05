@@ -1,7 +1,7 @@
 # RSDK-PERF-001 — SDK Performance & Language Comparison
 
 **Measured:** March 5, 2026  
-**Simulator:** `redfishMockupServer_platform.py` — Ares_AI_Blade mockup, HTTPS on `127.0.0.1:8000`  
+**Simulator:** `bmc-redfish-simulator`, HTTPS on `127.0.0.1:8000`  
 **Method:** `/usr/bin/time -v` wrapping each sample binary; 5 runs per combination; median wall-clock, mean RSS reported  
 **Rust build:** `cargo build --release`  
 **C++ build:** `cmake -DCMAKE_BUILD_TYPE=Debug` (default project build)  

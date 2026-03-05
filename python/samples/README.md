@@ -11,7 +11,7 @@ the `bmc-redfish-simulator` but works against any real BMC as well.
 pip install -e ".[dev]"
 
 # Start the simulator (in another terminal)
-cd /home/hari/Tools/bmc-redfish-simulator
+cd /path/to/bmc-redfish-simulator
 python simulator.py          # default: 127.0.0.1:8000
 ```
 

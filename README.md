@@ -128,7 +128,7 @@ implement*.
 
 ## Performance
 
-All three SDKs were benchmarked against the same Ares_AI_Blade mockup simulator
+All three SDKs were benchmarked against a Redfish-compliant simulator running locally
 (HTTPS, loopback). Full data in [docs/performance.md](docs/performance.md).
 
 ### Latency (median, 5 runs — loopback simulator)
