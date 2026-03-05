@@ -46,7 +46,12 @@ async def connect_async(
         task_timeout_sec=cfg.task_timeout_sec,
     )
     tls_config = build_tls_config(cfg)
-    base_url = f"https://{host}:{port}"
+    # Use http:// when TLS verification is disabled AND no CA cert is supplied
+    # (i.e. the caller explicitly wants a plain HTTP connection, e.g. a simulator).
+    # When verify_tls=False but a ca_cert is given we still use https.
+    use_https = cfg.verify_tls or bool(cfg.tls_ca_cert)
+    scheme = "https" if use_https else "http"
+    base_url = f"{scheme}://{host}:{port}"
 
     http = HttpClient(base_url, tls_config, timeouts)
 
@@ -122,6 +127,7 @@ async def _detect_capabilities_async(
         )
 
     body = raw.body_json
+    session_svc = body.get("SessionService")
     return EndpointCapabilities(
         redfish_version=body.get("RedfishVersion", ""),
         odata_version=raw.headers.get("odata-version", "4.0"),
@@ -131,4 +137,11 @@ async def _detect_capabilities_async(
             k for k, v in body.items()
             if isinstance(v, dict) and "@odata.id" in v
         ],
+        uuid=body.get("UUID", ""),
+        product=body.get("Product", ""),
+        session_service_uri=(
+            session_svc.get("@odata.id")
+            if isinstance(session_svc, dict)
+            else None
+        ),
     )

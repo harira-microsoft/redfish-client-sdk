@@ -61,12 +61,20 @@ class HttpClient:
         client = await self._get_async_client()
         merged_headers = {**_REDFISH_HEADERS, **(headers or {})}
         content = _json.dumps(body).encode() if body is not None else None
-        response = await client.request(
-            method=method,
-            url=path,
-            headers=merged_headers,
-            content=content,
-        )
+        try:
+            response = await client.request(
+                method=method,
+                url=path,
+                headers=merged_headers,
+                content=content,
+            )
+        except httpx.RemoteProtocolError as exc:
+            return RawHttpResponse(
+                status_code=503,
+                headers={},
+                body_text=str(exc),
+                body_json={"error": {"message": str(exc)}},
+            )
         return _to_raw(response)
 
     async def close_async(self) -> None:
@@ -98,12 +106,20 @@ class HttpClient:
         client = self._get_sync_client()
         merged_headers = {**_REDFISH_HEADERS, **(headers or {})}
         content = _json.dumps(body).encode() if body is not None else None
-        response = client.request(
-            method=method,
-            url=path,
-            headers=merged_headers,
-            content=content,
-        )
+        try:
+            response = client.request(
+                method=method,
+                url=path,
+                headers=merged_headers,
+                content=content,
+            )
+        except httpx.RemoteProtocolError as exc:
+            return RawHttpResponse(
+                status_code=503,
+                headers={},
+                body_text=str(exc),
+                body_json={"error": {"message": str(exc)}},
+            )
         return _to_raw(response)
 
     def close(self) -> None:
@@ -136,6 +152,10 @@ def _to_raw(response: httpx.Response) -> RawHttpResponse:
             body_json = response.json()
         except Exception:
             pass
+    # For responses with no parseable body (e.g. 204 No Content), fall back to
+    # an empty dict so callers can always do response.body.get(...) safely.
+    if body_json is None and not body_text.strip():
+        body_json = {}
     return RawHttpResponse(
         status_code=response.status_code,
         headers=headers,

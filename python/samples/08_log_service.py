@@ -59,7 +59,7 @@ async def main() -> None:
     async with ctx:
         logs = ctx.logs
 
-        # ── List log services ────────────────────────────────────────────
+        # ── List log services ──────────────────────────────────────────────
         print("Listing available log services …")
         svc_resp = await logs.list_services_async()
         if not svc_resp.success:
@@ -71,8 +71,6 @@ async def main() -> None:
 
         for svc in services:
             svc_uri = svc.get("@odata.id", "")
-            print(f"\n{'─'*60}")
-            print(f"  Log service: {svc_uri}")
 
             # ── Fetch entries (unfiltered, capped at max-entries) ────────
             filt = LogFilter(top=args.max_entries)

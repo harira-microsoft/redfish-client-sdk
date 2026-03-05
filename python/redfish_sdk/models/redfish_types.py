@@ -84,6 +84,9 @@ class EndpointCapabilities:
     short_form: bool = True
     base_path: str = "/redfish/v1"
     available_services: list[str] = field(default_factory=list)
+    uuid: str = ""
+    product: str = ""
+    session_service_uri: str | None = None
 
 
 # ---------------------------------------------------------------------------

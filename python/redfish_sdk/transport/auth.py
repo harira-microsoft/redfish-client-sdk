@@ -100,7 +100,7 @@ class AuthManager:
         self, status_code: int, headers: dict[str, str]
     ) -> AuthState:
         from redfish_sdk.errors import RedfishAuthError
-        if status_code not in (200, 201):
+        if status_code not in (200, 201, 204):
             raise RedfishAuthError(
                 f"Session creation failed — HTTP {status_code}"
             )

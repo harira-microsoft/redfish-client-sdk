@@ -65,8 +65,6 @@ async def run_session(host: str, port: int, creds: Credentials, config: Connecti
         print(f"  RedfishVersion : {caps.redfish_version}")
         print(f"  UUID           : {caps.uuid}")
         print(f"  SessionURI     : {caps.session_service_uri or 'N/A'}")
-
-        # Verify we can read resources
         t0 = time.perf_counter()
         systems = await ctx.get_async("/redfish/v1/Systems")
         elapsed = time.perf_counter() - t0

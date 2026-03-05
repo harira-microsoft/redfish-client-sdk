@@ -187,13 +187,14 @@ class EventServiceHandle:
     # Test event
     # ------------------------------------------------------------------
 
-    async def submit_test_event_async(self, event_data: dict) -> RedfishResponse:
+    async def submit_test_event_async(self, event_data: dict | None = None) -> RedfishResponse:
         uri = f"{self._service_uri}/Actions/EventService.SubmitTestEvent"
         headers = AuthManager.attach_auth(self._auth_state, {})
-        raw = await self._http.request_async("POST", uri, headers=headers, body=event_data)
+        body = event_data or {"EventType": "Alert", "MessageId": "Base.1.8.GeneralError"}
+        raw = await self._http.request_async("POST", uri, headers=headers, body=body)
         return build_response(raw.status_code, raw.headers, raw.body_json, raw.body_text)
 
-    def submit_test_event(self, event_data: dict) -> RedfishResponse:
+    def submit_test_event(self, event_data: dict | None = None) -> RedfishResponse:
         return asyncio.run(self.submit_test_event_async(event_data))
 
 

@@ -60,8 +60,12 @@ class ClientContext:
     def base_url(self) -> str:
         return str(self._http._base_url)
 
+    @property
+    def capabilities(self) -> EndpointCapabilities:
+        return self._capabilities
+
     # ------------------------------------------------------------------
-    # Service handles (lazy)
+    # Service handles (lazy) — canonical names
     # ------------------------------------------------------------------
 
     @property
@@ -105,13 +109,47 @@ class ClientContext:
         from redfish_sdk.discovery.discovery import Discovery
         if "discovery" not in self._service_handles:
             self._service_handles["discovery"] = Discovery(
-                self._http, self._auth_state, self._discovery_map
+                self._http, self._auth_state, self._discovery_map, self._capabilities
             )
         return self._service_handles["discovery"]
 
     # ------------------------------------------------------------------
-    # Direct / raw access — async
+    # Short aliases used by samples
     # ------------------------------------------------------------------
+
+    @property
+    def events(self):
+        return self.event_service
+
+    @property
+    def logs(self):
+        return self.log_service
+
+    @property
+    def telemetry(self):
+        return self.telemetry_service
+
+    @property
+    def update(self):
+        return self.update_service
+
+    # ------------------------------------------------------------------
+    # Discovery convenience methods
+    # ------------------------------------------------------------------
+
+    async def discover_async(self, service: str | None = None, root_only: bool = False):
+        """Convenience wrapper: run discovery and return DiscoveryResult."""
+        d = self.discovery
+        if root_only:
+            return await d.root_async()
+        if service:
+            return await d.partial_async(service)
+        return await d.full_async()
+
+    def discover(self, service: str | None = None, root_only: bool = False):
+        import asyncio
+        return asyncio.run(self.discover_async(service=service, root_only=root_only))
+
 
     async def get_async(self, uri: str) -> RedfishResponse:
         headers = AuthManager.attach_auth(self._auth_state, {})
@@ -163,6 +201,18 @@ class ClientContext:
 
     def close(self) -> None:
         asyncio.run(self.close_async())
+
+    async def __aenter__(self) -> "ClientContext":
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        await self.close_async()
+
+    def __enter__(self) -> "ClientContext":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
 
     def __repr__(self) -> str:
         return f"ClientContext(base_url={self.base_url!r}, connected={self._connected})"

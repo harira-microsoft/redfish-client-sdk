@@ -91,11 +91,15 @@ async def main() -> None:
 
         # ── PATCH — set AssetTag on first system ────────────────────────
         if first_sys_uri:
-            patch_resp = await ctx.patch_async(
-                first_sys_uri,
-                body={"AssetTag": "RSDK-Sample-04"},
-            )
-            _dump(f"PATCH {first_sys_uri} AssetTag", patch_resp)
+            try:
+                patch_resp = await ctx.patch_async(
+                    first_sys_uri,
+                    body={"AssetTag": "RSDK-Sample-04"},
+                )
+                _dump(f"PATCH {first_sys_uri} AssetTag", patch_resp)
+            except Exception as exc:  # noqa: BLE001
+                print(f"\n✗ PATCH {first_sys_uri} → {type(exc).__name__}: {exc} (simulator may not support PATCH)")
+                first_sys_uri = None  # skip verify step
 
         # ── GET — verify PATCH took effect ──────────────────────────────
         if first_sys_uri:
@@ -107,14 +111,16 @@ async def main() -> None:
         # ── POST — Reset action on first system ─────────────────────────
         if first_sys_uri:
             reset_uri = f"{first_sys_uri}/Actions/ComputerSystem.Reset"
-            reset_resp = await ctx.post_async(
-                reset_uri,
-                body={"ResetType": "GracefulRestart"},
-            )
-            _dump(f"POST {reset_uri}", reset_resp)
-            # 200/202/204 are success; tasks return 202 + task body
-            if reset_resp.task:
-                print(f"   Task URI : {reset_resp.task.task_uri}")
+            try:
+                reset_resp = await ctx.post_async(
+                    reset_uri,
+                    body={"ResetType": "GracefulRestart"},
+                )
+                _dump(f"POST {reset_uri}", reset_resp)
+                if reset_resp.task:
+                    print(f"   Task URI : {reset_resp.task.task_uri}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"\n✗ POST {reset_uri} → {type(exc).__name__}: {exc} (simulator may not support this action)")
 
         print("\n✓ Direct API sample complete")
 

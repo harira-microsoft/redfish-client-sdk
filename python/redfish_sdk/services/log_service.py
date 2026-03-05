@@ -27,7 +27,7 @@ class LogFilter:
     start_time: str | None = None
     end_time: str | None = None
     message_id: str | None = None
-    max_entries: int | None = None
+    top: int | None = None
 
 
 class LogServiceHandle:
@@ -51,9 +51,42 @@ class LogServiceHandle:
     # ------------------------------------------------------------------
 
     async def list_services_async(self) -> RedfishResponse:
+        """Discover all LogService instances across Systems and Managers.
+
+        Redfish LogServices are not at a top-level URI — they live under
+        each System and Manager member.  This method walks both collections
+        and returns a synthetic aggregated collection response so callers
+        can iterate Members[] without knowing the tree layout.
+        """
         headers = AuthManager.attach_auth(self._auth_state, {})
-        raw = await self._http.request_async("GET", self._service_uri, headers=headers)
-        return build_response(raw.status_code, raw.headers, raw.body_json, raw.body_text)
+        all_members: list[dict] = []
+
+        for collection_path in ("/redfish/v1/Systems", "/redfish/v1/Managers"):
+            raw = await self._http.request_async("GET", collection_path, headers=headers)
+            if raw.status_code != 200 or not isinstance(raw.body_json, dict):
+                continue
+            for member in raw.body_json.get("Members", []):
+                member_uri = member.get("@odata.id", "")
+                if not member_uri:
+                    continue
+                log_raw = await self._http.request_async(
+                    "GET", f"{member_uri}/LogServices", headers=headers
+                )
+                if log_raw.status_code == 200 and isinstance(log_raw.body_json, dict):
+                    all_members.extend(log_raw.body_json.get("Members", []))
+
+        if not all_members:
+            # Fallback: try the URI from discovery map or default path
+            raw = await self._http.request_async("GET", self._service_uri, headers=headers)
+            return build_response(raw.status_code, raw.headers, raw.body_json, raw.body_text)
+
+        synthetic_body: dict = {
+            "@odata.type": "#LogServiceCollection.LogServiceCollection",
+            "Name": "Log Services",
+            "Members": all_members,
+            "Members@odata.count": len(all_members),
+        }
+        return build_response(200, {}, synthetic_body, "")
 
     def list_services(self) -> RedfishResponse:
         return asyncio.run(self.list_services_async())
@@ -111,6 +144,6 @@ def _build_filter_params(filter: LogFilter | None) -> str:
     parts = []
     if filter.severity:
         parts.append(f"$filter=Severity eq '{filter.severity}'")
-    if filter.max_entries:
-        parts.append(f"$top={filter.max_entries}")
+    if filter.top:
+        parts.append(f"$top={filter.top}")
     return "&".join(parts)

@@ -6,8 +6,8 @@ build-backend = "hatchling.build"
 name = "redfish-sdk"
 version = "0.1.0"
 description = "A Python SDK for building clients against any Redfish-compliant endpoint"
-readme = "README.md"
-requires-python = ">=3.11"
+readme = "docs/api-guide.md"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "Hari Ramachandran", email = "harira@microsoft.com" }

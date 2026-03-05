@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from redfish_sdk.transport.auth import AuthManager
+from redfish_sdk.models.redfish_types import EndpointCapabilities
 
 if TYPE_CHECKING:
     from redfish_sdk.transport.http_client import HttpClient
@@ -36,7 +37,7 @@ _SERVICE_KEYS = [
 @dataclass
 class DiscoveryResult:
     services: dict[str, str] = field(default_factory=dict)     # name → URI
-    capabilities: list[str] = field(default_factory=list)
+    capabilities: EndpointCapabilities = field(default_factory=EndpointCapabilities)
     raw: dict = field(default_factory=dict)
 
     def has_service(self, name: str) -> bool:
@@ -53,10 +54,12 @@ class Discovery:
         http: HttpClient,
         auth_state: AuthState,
         discovery_map: dict[str, str],
+        capabilities: EndpointCapabilities | None = None,
     ) -> None:
         self._http = http
         self._auth_state = auth_state
         self._map = discovery_map   # reference to context's map — side effect updates it
+        self._capabilities = capabilities or EndpointCapabilities()
 
     # ------------------------------------------------------------------
     # Public — async
@@ -73,7 +76,7 @@ class Discovery:
         self._map.update(services)
         return DiscoveryResult(
             services=services,
-            capabilities=list(services.keys()),
+            capabilities=self._capabilities,
             raw=service_root,
         )
 
@@ -87,7 +90,7 @@ class Discovery:
         self._map.update(services)
         return DiscoveryResult(
             services=services,
-            capabilities=list(services.keys()),
+            capabilities=self._capabilities,
             raw=service_root,
         )
 
@@ -102,7 +105,7 @@ class Discovery:
         services = {k: v for k, v in services.items() if v}
         return DiscoveryResult(
             services=services,
-            capabilities=list(services.keys()),
+            capabilities=self._capabilities,
             raw=service_root,
         )
 
