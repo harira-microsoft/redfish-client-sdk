@@ -534,6 +534,8 @@ impl<'ctx> EventServiceHandle<'ctx> {
         event_types:       Vec<String>,
         registry_prefixes: Vec<String>,
         message_ids:       Vec<String>,
+        resource_types:    Vec<String>,
+        event_format_type: Option<&str>,    // "Event" (default) or "MetricReport"
         context:           Option<&str>,
         protocol:          &str,            // default: "Redfish"
         subscription_type: &str,            // default: "RedfishEvent"
@@ -594,11 +596,19 @@ impl<'ctx> LogServiceHandle<'ctx> {
     pub async fn list_services(&self)
         -> Result<RedfishResponse, RedfishError>;
 
-    pub async fn get_entries(
+    pub async fn list_entries(
         &self,
         log_service_uri: &str,
-        filter:          Option<LogFilter>,
+        query:           LogQuery,
     ) -> Result<RedfishResponse, RedfishError>;
+
+    // Auto-pagination — follows Members@odata.nextLink, yields one page per item
+    pub fn iter_entries(
+        &self,
+        log_service_uri: &str,
+        query:           LogQuery,
+        max_pages:       Option<usize>,
+    ) -> Pin<Box<dyn Stream<Item = Result<RedfishResponse, RedfishError>> + Send + '_>>;
 
     pub async fn get_entry(&self, entry_uri: &str)
         -> Result<RedfishResponse, RedfishError>;
@@ -606,25 +616,51 @@ impl<'ctx> LogServiceHandle<'ctx> {
     pub async fn clear_log(&self, log_service_uri: &str)
         -> Result<RedfishResponse, RedfishError>;
 
+    // Parse a raw IPMI SEL entry — structured JSON or flat "Raw data: xx xx …" string (FR6.6)
+    pub fn parse_sel_entry(entry: &serde_json::Value) -> Option<SelEntry>;
+
     // Sync variants
     pub fn list_services_blocking(&self)         -> Result<RedfishResponse, RedfishError>;
-    pub fn get_entries_blocking(&self, log_service_uri: &str, filter: Option<LogFilter>)
+    pub fn list_entries_blocking(&self, log_service_uri: &str, query: LogQuery)
         -> Result<RedfishResponse, RedfishError>;
+    // Blocking pagination — callback receives each page; return false to stop
+    pub fn iter_entries_blocking<F>(
+        &self,
+        log_service_uri: &str,
+        query:           LogQuery,
+        max_pages:       Option<usize>,
+        on_page:         F,
+    ) where F: FnMut(RedfishResponse) -> bool;
     pub fn get_entry_blocking(&self, entry_uri: &str)      -> Result<RedfishResponse, RedfishError>;
     pub fn clear_log_blocking(&self, log_service_uri: &str) -> Result<RedfishResponse, RedfishError>;
 }
 ```
 
-### LogFilter
+### LogQuery
 
 ```rust
-#[derive(Debug, Default)]
-pub struct LogFilter {
-    pub severity:    Option<String>,    // "OK" | "Warning" | "Critical"
-    pub start_time:  Option<String>,    // ISO 8601
-    pub end_time:    Option<String>,    // ISO 8601
-    pub message_id:  Option<String>,    // filter by MessageId prefix
-    pub max_entries: Option<usize>,
+#[derive(Debug, Default, Clone)]
+pub struct LogQuery {
+    pub top:          Option<usize>,    // $top  — max entries per page
+    pub skip:         Option<usize>,    // $skip — offset into collection
+    pub severity:     Option<String>,   // $filter=Severity eq '…'
+    pub message_id:   Option<String>,   // $filter=MessageId eq '…'
+    pub odata_filter: Option<String>,   // raw $filter expression (overrides severity/message_id)
+}
+```
+
+> OData parameter order always emitted as **`$skip → $top → $filter`** (required by OpenBMC).
+
+### SelEntry
+
+```rust
+#[derive(Debug, Clone)]
+pub struct SelEntry {
+    pub timestamp:  Option<String>,
+    pub message_id: Option<String>,
+    pub severity:   Option<String>,
+    pub message:    Option<String>,
+    pub raw_bytes:  Option<Vec<u8>>,   // populated for flat "Raw data: xx xx …" entries
 }
 ```
 
@@ -744,12 +780,15 @@ impl<'ctx> UpdateServiceHandle<'ctx> {
 
 ```rust
 pub struct RedfishEventListener {
-    port:        u16,
-    host:        String,
-    tls_cert:    Option<String>,
-    tls_key:     Option<String>,
-    callbacks:   Arc<Mutex<CallbackRegistry>>,
-    join_handle: Option<tokio::task::JoinHandle<()>>,
+    port:          u16,
+    host:          String,
+    context_token: Option<String>,
+    tls_cert:      Option<String>,
+    tls_key:       Option<String>,
+    callbacks:     Arc<Mutex<CallbackRegistry>>,
+    event_buffer:  Arc<Mutex<VecDeque<RedfishEvent>>>,   // bounded ring buffer (default 500)
+    ip_stats:      Arc<Mutex<HashMap<String, u64>>>,
+    join_handle:   Option<tokio::task::JoinHandle<()>>,
 }
 ```
 
@@ -761,6 +800,7 @@ impl RedfishEventListener {
 
     pub fn with_host(self, host: &str) -> Self;        // builder pattern
     pub fn with_tls(self, cert: &str, key: &str) -> Self;
+    pub fn with_context_token(self, token: &str) -> Self;  // validate Context field on each event (FR5.3)
 
     // Wire to context for MessageRegistry decoding (optional)
     pub fn use_context(&mut self, ctx: &ClientContext);
@@ -787,6 +827,10 @@ impl RedfishEventListener {
 
     pub fn is_running(&self)  -> bool;
     pub fn listen_url(&self)  -> String;    // e.g. "http://0.0.0.0:9090"
+
+    // Inspection — thread-safe snapshots
+    pub fn get_buffered_events(&self) -> Vec<RedfishEvent>;   // most recent ≤500 events (FR5.3)
+    pub fn get_ip_stats(&self) -> HashMap<String, u64>;       // source IP → cumulative count (FR5.3)
 }
 ```
 
@@ -809,6 +853,19 @@ is stored in `join_handle`. On `stop()` or `Drop`, the handle is aborted.
 
 Callbacks are stored in `Arc<Mutex<CallbackRegistry>>` so they can be
 shared safely between the listener task and the registration methods.
+
+### Implementation Notes (FR5.3)
+
+- **Context token validation**: if `context_token` is `Some`, each event's
+  `Context` field is compared; on mismatch the listener returns `204 No Content`
+  and callbacks are not invoked
+- **Latency logging**: delta between `EventTimestamp` (ISO 8601) and reception
+  `SystemTime` is computed and emitted via `tracing::debug!`
+- **Ring buffer**: `event_buffer` is a `VecDeque<RedfishEvent>` capped at 500
+  entries (oldest discarded on overflow); `get_buffered_events()` returns a clone
+- **Per-IP counter**: source IP extracted from `axum`'s `ConnectInfo<SocketAddr>`;
+  count incremented under the `ip_stats` mutex; `get_ip_stats()` returns a clone
+- Callbacks are dispatched via `tokio::spawn` — they do not block event reception
 
 ---
 
@@ -1142,4 +1199,6 @@ No runtime checks are involved — all are compile-time.
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — Rust design |
 | 0.2 | 2026-03-05 | Copilot | Added retry fields to ConnectionConfig (§6); added refresh_auth() to ClientContext (§5); refactored HttpClient from struct to pub(crate) trait with DefaultHttpClient + MockHttpClient (§16); aligned with FR1.8–FR1.10, NFR8 |
+| 0.3 | 2026-03-05 | Copilot | §11 subscribe() gains `resource_types` + `event_format_type` (FR5.1); §15 RedfishEventListener: `context_token` validation, latency logging, per-IP counter (`get_ip_stats()`), ring buffer 500 (`get_buffered_events()`) (FR5.3) |
+| 0.4 | 2026-03-05 | Copilot | §12 `LogFilter` replaced by `LogQuery` (`top`, `skip`, `severity`, `message_id`, `odata_filter`); `get_entries()` renamed `list_entries()`; `iter_entries()` Stream added for nextLink pagination (FR6.8); `parse_sel_entry()` + `SelEntry` added (FR6.6); OData ordering rule documented (FR6.7) |
 | 0.5 | 2026-03-05 | Copilot | §11 `subscribe_sse()` removed (SSE not a supported SDK feature — not fully defined by Redfish, never implemented in Python/C++); §13 `stream_metric_reports()` removed (same reason) |

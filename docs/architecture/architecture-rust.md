@@ -147,7 +147,10 @@ RedfishClientSDK/
             │   ├── 09_telemetry.rs
             │   ├── 10_update_service.rs
             │   ├── 11_task_polling.rs
-            │   └── 12_session_vs_stateless.rs
+            │   ├── 12_session_vs_stateless.rs
+            │   ├── 13_retry_and_refresh.rs
+            │   ├── 14_sel_parsing.rs
+            │   └── 15_multipart_upload.rs
             └── README.md
 ```
 
@@ -201,6 +204,14 @@ They expose intent-driven async methods returning
 Each method has an async variant (primary) and a blocking sync variant
 (suffixed with `_blocking`).
 
+The **LogServiceHandle** (`ctx.log_service()`) accepts a `LogQuery` struct
+carrying `top`, `skip`, `severity`, `message_id`, and `odata_filter` fields.
+`list_entries()` builds the OData query string in the required order
+(`$skip` → `$top` → `$filter`). `iter_entries()` returns an async `Stream`
+that follows `Members@odata.nextLink` across pages without caller-managed
+offset tracking. `parse_sel_entry()` handles both structured JSON entries
+and flat `"Raw data: xx xx …"` IPMI SEL strings (FR6.6).
+
 ---
 
 ### Discovery → `discovery/discovery.rs`
@@ -240,17 +251,32 @@ Private modules wrapping `reqwest`:
 
 ### Event Listener → `events/listener.rs`
 
-A standalone struct `RedfishEventListener`. Built on `axum` running on
-its own `tokio` runtime (spawned on a dedicated thread — the one exception
-to NFR3.4, same as C++).
+A standalone struct `RedfishEventListener`. Built on `axum` running as a
+`tokio::task`, with callbacks stored in `Arc<Mutex<CallbackRegistry>>` so
+they can be registered and fired across threads safely.
 
 Callback registration uses Rust closures or trait objects:
 
-```
+```rust
 listener.on_event(|event: RedfishEvent| async move {
-    // handle event
-})
+    println!("{}", event.message_id);
+});
+listener.on_event_type("Alert", |event| async move { /* … */ });
+listener.on_registry("OpenBMC", |event| async move { /* … */ });
 ```
+
+**v0.3 enhancements (FR5.3):**
+
+- **Context token validation** — if the listener was constructed with
+  `.with_context_token("token")`, the `Context` field of each incoming
+  event is compared; on mismatch the listener responds `204 No Content`
+  without firing any callbacks
+- **Latency logging** — the event's `EventTimestamp` is compared to the
+  reception `SystemTime`; the delta is logged at `tracing::debug!` level
+- **Per-IP counter** — source IP → cumulative event count, accessible
+  via `get_ip_stats() -> HashMap<String, u64>`
+- **Ring buffer** — bounded 500-event `VecDeque` stores the most recent
+  events; accessible via `get_buffered_events() -> Vec<RedfishEvent>`
 
 Push delivery via `RedfishEventListener` is the supported event reception mechanism. SSE streaming is not a supported SDK feature.
 
@@ -442,4 +468,6 @@ cargo publish
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — Rust architecture |
+| 0.3 | 2026-03-05 | Copilot | §4 samples 13–15 added; §5 Service Handles: LogServiceHandle LogQuery/iter_entries/parse_sel_entry note; §5 Event Listener: v0.3 enhancements (context token, latency logging, per-IP counter, ring buffer) |
+| 0.4 | 2026-03-05 | Copilot | §5 LogServiceHandle note updated to reflect LogQuery OData ordering rule |
 | 0.5 | 2026-03-05 | Copilot | §5 Event Listener: clarified push delivery is the supported model; SSE not a supported SDK feature |
