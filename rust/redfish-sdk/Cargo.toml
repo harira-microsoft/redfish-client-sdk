@@ -1,0 +1,46 @@
+[package]
+name    = "redfish-sdk"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description  = "Redfish Client SDK — idiomatic Rust"
+license      = "MIT"
+
+[dependencies]
+# HTTP
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "blocking", "multipart", "stream"] }
+
+# Async runtime
+tokio   = { version = "1", features = ["full"] }
+
+# Serialisation
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async traits / streams
+async-trait = "0.1"
+futures     = "0.3"
+pin-project = "1"
+
+# Event listener server
+axum        = { version = "0.7", features = ["tokio"] }
+tokio-util  = { version = "0.7", features = ["rt"] }
+
+# Error derive
+thiserror = "1"
+
+# Base64 for stateless auth
+base64 = "0.22"
+
+# Logging
+tracing = "0.1"
+
+# Async stream macro (used in iter_entries)
+async-stream = "0.3"
+
+# URL-encoding for OData filter values
+urlencoding = "2"
+
+[dev-dependencies]
+tokio       = { version = "1", features = ["full"] }
+tracing-subscriber = "0.3"

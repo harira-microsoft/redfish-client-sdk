@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "redfish-sdk",
+    "samples",
+]
+resolver = "2"

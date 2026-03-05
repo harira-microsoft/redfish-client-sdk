@@ -1,0 +1,71 @@
+[package]
+name    = "redfish-samples"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+redfish-sdk        = { path = "../redfish-sdk" }
+tokio              = { version = "1", features = ["full"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde_json         = "1"
+futures            = "0.3"
+
+[[bin]]
+name = "01_connect_discover"
+path = "src/bin/01_connect_discover.rs"
+
+[[bin]]
+name = "02_partial_discover"
+path = "src/bin/02_partial_discover.rs"
+
+[[bin]]
+name = "03_get_resources"
+path = "src/bin/03_get_resources.rs"
+
+[[bin]]
+name = "04_direct_api"
+path = "src/bin/04_direct_api.rs"
+
+[[bin]]
+name = "05_event_subscribe"
+path = "src/bin/05_event_subscribe.rs"
+
+[[bin]]
+name = "06_event_listener"
+path = "src/bin/06_event_listener.rs"
+
+[[bin]]
+name = "07_event_monitor"
+path = "src/bin/07_event_monitor.rs"
+
+[[bin]]
+name = "08_log_service"
+path = "src/bin/08_log_service.rs"
+
+[[bin]]
+name = "09_telemetry"
+path = "src/bin/09_telemetry.rs"
+
+[[bin]]
+name = "10_update_service"
+path = "src/bin/10_update_service.rs"
+
+[[bin]]
+name = "11_task_polling"
+path = "src/bin/11_task_polling.rs"
+
+[[bin]]
+name = "12_session_vs_stateless"
+path = "src/bin/12_session_vs_stateless.rs"
+
+[[bin]]
+name = "13_retry_and_refresh"
+path = "src/bin/13_retry_and_refresh.rs"
+
+[[bin]]
+name = "14_sel_parsing"
+path = "src/bin/14_sel_parsing.rs"
+
+[[bin]]
+name = "15_multipart_upload"
+path = "src/bin/15_multipart_upload.rs"
