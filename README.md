@@ -47,8 +47,8 @@ to your callback. Tasks polled automatically.
 
 | Phase | Language | Status |
 |---|---|---|
-| 1 | Python | 🔧 In development |
-| 2 | C++ | 📋 Designed |
+| 1 | Python | ✅ Complete |
+| 2 | C++ | ✅ Complete |
 | 3 | Rust | 📋 Designed |
 
 Each language is a **first-class idiomatic implementation** — not a binding
@@ -78,8 +78,15 @@ RedfishClientSDK/
 │       ├── design-cpp.md                   ← C++ detailed design
 │       └── design-rust.md                  ← Rust detailed design
 │
-├── python/                                 ← Python SDK (coming)
-├── cpp/                                    ← C++ SDK (coming)
+├── python/                                 ← Python SDK ✅
+│   ├── redfish_sdk/                        ← SDK source
+│   ├── samples/                            ← 10 samples
+│   └── docs/api-guide.md                  ← Python API reference
+├── cpp/                                    ← C++ SDK ✅
+│   ├── include/redfish_sdk/               ← Public headers
+│   ├── src/                               ← Implementations
+│   ├── samples/                           ← 8 samples
+│   └── docs/api-guide.md                  ← C++ API reference
 └── rust/                                   ← Rust SDK (coming)
 ```
 
@@ -100,11 +107,11 @@ implement*.
 
 ### By Language
 
-| Language | Architecture | Design |
-|---|---|---|
-| Python | [architecture-python.md](docs/architecture/architecture-python.md) | [design-python.md](docs/design/design-python.md) |
-| C++ | [architecture-cpp.md](docs/architecture/architecture-cpp.md) | [design-cpp.md](docs/design/design-cpp.md) |
-| Rust | [architecture-rust.md](docs/architecture/architecture-rust.md) | [design-rust.md](docs/design/design-rust.md) |
+| Language | Architecture | Design | API Guide |
+|---|---|---|---|
+| Python | [architecture-python.md](docs/architecture/architecture-python.md) | [design-python.md](docs/design/design-python.md) | [api-guide.md](python/docs/api-guide.md) |
+| C++ | [architecture-cpp.md](docs/architecture/architecture-cpp.md) | [design-cpp.md](docs/design/design-cpp.md) | [api-guide.md](cpp/docs/api-guide.md) |
+| Rust | [architecture-rust.md](docs/architecture/architecture-rust.md) | [design-rust.md](docs/design/design-rust.md) | — |
 
 ---
 
@@ -180,14 +187,37 @@ All samples target the [bmc-redfish-simulator](https://github.com/your-org/bmc-r
 running locally on `127.0.0.1:8000`. No real hardware required to get
 started.
 
-```bash
-# Start the simulator
-cd /path/to/bmc-redfish-simulator
-python main.py
+### Python
 
-# Run a sample (once Python SDK is available)
-python python/samples/01_connect_discover.py --host 127.0.0.1 --port 8000
+```bash
+# Install the SDK
+cd python/ && pip install -e .
+
+# Run a sample
+python samples/01_connect_discover.py
+python samples/05_event_subscribe.py
+python samples/09_telemetry.py
 ```
+
+### C++
+
+```bash
+# Install build dependencies (Ubuntu / Debian)
+sudo apt install build-essential cmake libcurl4-openssl-dev \
+                 libssl-dev nlohmann-json3-dev
+
+# Build
+cd cpp/
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+
+# Run a sample
+./build/01_connect_discover
+./build/05_event_subscribe
+./build/09_telemetry
+```
+
+See [cpp/docs/api-guide.md](cpp/docs/api-guide.md) for the full C++ API reference.
 
 ---
 
