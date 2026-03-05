@@ -22,8 +22,11 @@ from redfish_sdk.models.redfish_types import (
     TimeoutConfig,
 )
 from redfish_sdk.transport.auth import AuthManager
-from redfish_sdk.transport.http_client import HttpClient
+from redfish_sdk.transport.http_client import DefaultHttpClient
 from redfish_sdk.transport.tls import build_tls_config
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 async def connect_async(
@@ -46,20 +49,28 @@ async def connect_async(
         task_timeout_sec=cfg.task_timeout_sec,
     )
     tls_config = build_tls_config(cfg)
-    # Use http:// when TLS verification is disabled AND no CA cert is supplied
-    # (i.e. the caller explicitly wants a plain HTTP connection, e.g. a simulator).
-    # When verify_tls=False but a ca_cert is given we still use https.
-    use_https = cfg.verify_tls or bool(cfg.tls_ca_cert)
-    scheme = "https" if use_https else "http"
-    base_url = f"{scheme}://{host}:{port}"
+    # Always HTTPS — verify_tls controls cert verification, not the protocol.
+    # (verify_tls=False = use HTTPS with unverified/self-signed cert)
+    base_url = f"https://{host}:{port}"
 
-    http = HttpClient(base_url, tls_config, timeouts)
+    # Best-effort HTTP probe to /redfish/v1 for service discovery.
+    # Real BMCs expose this unauthenticated endpoint over plain HTTP.
+    # Non-fatal: if the server only speaks HTTPS the probe is skipped silently.
+    base_path = cfg.base_path_override or "/redfish/v1"
+    await _http_probe_async(host, port, base_path, timeouts.connect_sec)
+
+    logger.debug("Connecting to %s (auth=%s)", base_url, auth_mode.value)
+    http = DefaultHttpClient(base_url, tls_config, timeouts, cfg)
 
     try:
         auth_manager = AuthManager(http, credentials, auth_mode)
         auth_state = await auth_manager.authenticate_async()
+        logger.debug("Authenticated via %s", auth_mode.value)
     except httpx.ConnectError as exc:
         await http.close_async()
+        cause = exc.__cause__ or exc.__context__
+        if isinstance(cause, ssl.SSLError):
+            raise RedfishTLSError(f"TLS error connecting to {host}:{port} — {cause}") from exc
         raise RedfishConnectionError(f"Cannot reach {host}:{port} — {exc}") from exc
     except ssl.SSLError as exc:
         await http.close_async()
@@ -82,7 +93,10 @@ async def connect_async(
             raise
 
     capabilities = await _detect_capabilities_async(http, auth_state, cfg)
-
+    logger.debug(
+        "Connected to %s — Redfish %s",
+        base_url, capabilities.redfish_version,
+    )
     return ClientContext(
         http=http,
         auth_state=auth_state,
@@ -121,6 +135,25 @@ def connect(
 # ------------------------------------------------------------------
 # Internal
 # ------------------------------------------------------------------
+
+async def _http_probe_async(host: str, port: int, path: str, timeout: float) -> None:
+    """
+    Unauthenticated HTTP GET to /redfish/v1 for initial service discovery.
+    Real BMCs serve this endpoint over plain HTTP (no credentials, no TLS).
+    Non-fatal: if the server only speaks HTTPS the probe fails silently and
+    the caller proceeds to the HTTPS connection.
+    """
+    probe_url = f"http://{host}:{port}{path}"
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as probe:
+            resp = await probe.get(probe_url)
+            if resp.status_code == 200 and "RedfishVersion" in resp.text:
+                logger.debug("HTTP probe %s — Redfish endpoint confirmed", probe_url)
+            else:
+                logger.debug("HTTP probe %s returned HTTP %d", probe_url, resp.status_code)
+    except Exception as exc:
+        logger.debug("HTTP probe %s failed (non-fatal): %s", probe_url, exc)
+
 
 async def _detect_capabilities_async(
     http: HttpClient,

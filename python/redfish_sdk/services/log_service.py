@@ -8,7 +8,9 @@ Imports: protocol, transport.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+import logging
+import struct
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from redfish_sdk.protocol.response import RedfishResponse, build_response
@@ -17,6 +19,130 @@ from redfish_sdk.transport.auth import AuthManager
 if TYPE_CHECKING:
     from redfish_sdk.transport.http_client import HttpClient
     from redfish_sdk.models.redfish_types import AuthState
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# SEL parsing — FR6.6 (ported from team Rust client, src/events.rs)
+# ---------------------------------------------------------------------------
+# IPMI SEL record type bytes for OpenBMC OEM timestamped events
+_SEL_TYPE_PXE = 0xCA       # PXE boot events
+_SEL_TYPE_HOST_OS = 0xD9   # Host OS state events
+# Host OS event subtypes (byte 13 of the 16-byte SEL record)
+_HOST_OS_MODE_CHANGE = 0x01
+_HOST_OS_HAND_OFF = 0x02
+
+
+@dataclass
+class ParsedSelRecord:
+    """
+    Decoded IPMI SEL binary record.
+
+    record_type values:
+      - ``"PxeBoot"``       — OEM PXE boot event (record type byte 0xCA)
+      - ``"HostOsModeChange"`` — Host OS trust mode change (0xD9, subtype 0x01)
+      - ``"HostOsHandOff"`` — Host OS hand-off (0xD9, subtype 0x02)
+      - ``"Unknown"``       — any other record type byte
+    """
+    record_type: str
+    record_id: int
+    timestamp_raw: int          # Unix epoch from SEL bytes (not the Redfish 'created' field)
+    raw_hex: str                # normalised uppercase hex, no spaces
+    raw_bytes: list[int]
+    sensor_type: int | None = None
+    sensor_number: int | None = None
+    event_dir_type: int | None = None
+    event_data: list[int] = field(default_factory=list)
+    description: str = ""
+
+
+def parse_sel_entry(raw_hex: str) -> ParsedSelRecord:
+    """
+    Parse a raw IPMI SEL record from a hex string.
+
+    Accepts the raw hex directly or with an OpenBMC ``"Raw Data : Hex "``
+    prefix (as found in ``LogEntry.MessageArgs[0]``).
+
+    Raises :class:`redfish_sdk.errors.RedfishSDKError` on invalid input.
+
+    Real-world examples::
+
+        # PXE boot start (OpenBMC)
+        parse_sel_entry("b70fcad117db6837010000002000FFFF")
+        # Host OS mode change
+        parse_sel_entry("Raw Data : Hex e911d9df4cdc682000000401 01 01 0200")
+    """
+    from redfish_sdk.errors import RedfishSDKError
+
+    cleaned = raw_hex.strip()
+    if "Raw Data : Hex " in cleaned:
+        cleaned = cleaned.split("Raw Data : Hex ")[-1].strip()
+    cleaned = cleaned.replace(" ", "").upper()
+
+    if len(cleaned) < 32:
+        raise RedfishSDKError(
+            f"SEL record too short: {len(cleaned)} hex chars (need >= 32 for 16 bytes)"
+        )
+
+    try:
+        raw = bytes.fromhex(cleaned[:32])  # always take the first 16 bytes
+    except ValueError as exc:
+        raise RedfishSDKError(f"Invalid hex in SEL record: {exc}") from exc
+
+    record_id = int.from_bytes(raw[0:2], "little")
+    record_type_byte = raw[2]
+    timestamp_raw = int.from_bytes(raw[3:7], "little")
+
+    logger.debug(
+        "parse_sel_entry: record_id=0x%04X type=0x%02X timestamp=%d",
+        record_id, record_type_byte, timestamp_raw,
+    )
+
+    if record_type_byte == _SEL_TYPE_PXE:
+        return ParsedSelRecord(
+            record_type="PxeBoot",
+            record_id=record_id,
+            timestamp_raw=timestamp_raw,
+            raw_hex=cleaned,
+            raw_bytes=list(raw),
+            event_data=list(raw[12:15]),
+            description="PXE boot event",
+        )
+
+    if record_type_byte == _SEL_TYPE_HOST_OS:
+        subtype = raw[13]
+        if subtype == _HOST_OS_MODE_CHANGE:
+            rtype, desc = "HostOsModeChange", "Host OS trust mode change"
+        elif subtype == _HOST_OS_HAND_OFF:
+            rtype, desc = "HostOsHandOff", "Host OS hand-off"
+        else:
+            rtype, desc = "HostOsUnknown", f"Host OS event subtype 0x{subtype:02X}"
+        return ParsedSelRecord(
+            record_type=rtype,
+            record_id=record_id,
+            timestamp_raw=timestamp_raw,
+            raw_hex=cleaned,
+            raw_bytes=list(raw),
+            sensor_type=raw[10],
+            sensor_number=raw[11],
+            event_dir_type=raw[12],
+            event_data=list(raw[12:15]),
+            description=desc,
+        )
+
+    # Standard system event (0x02) or unrecognised OEM type
+    return ParsedSelRecord(
+        record_type="Unknown",
+        record_id=record_id,
+        timestamp_raw=timestamp_raw,
+        raw_hex=cleaned,
+        raw_bytes=list(raw),
+        sensor_type=raw[10] if len(raw) > 10 else None,
+        sensor_number=raw[11] if len(raw) > 11 else None,
+        event_dir_type=raw[12] if len(raw) > 12 else None,
+        event_data=list(raw[13:16]) if len(raw) > 13 else [],
+        description=f"Unrecognised SEL record type 0x{record_type_byte:02X}",
+    )
 
 _DEFAULT_SERVICE_PATH = "/redfish/v1/Systems/1/LogServices"
 
@@ -58,6 +184,7 @@ class LogServiceHandle:
         and returns a synthetic aggregated collection response so callers
         can iterate Members[] without knowing the tree layout.
         """
+        logger.debug("list_services: walking /redfish/v1/Systems and /redfish/v1/Managers")
         headers = AuthManager.attach_auth(self._auth_state, {})
         all_members: list[dict] = []
 

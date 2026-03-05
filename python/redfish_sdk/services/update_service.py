@@ -8,6 +8,9 @@ Imports: protocol, transport.
 from __future__ import annotations
 
 import asyncio
+import json as _json
+import logging
+import os
 from typing import TYPE_CHECKING
 
 from redfish_sdk.protocol.response import RedfishResponse, build_response
@@ -17,6 +20,8 @@ from redfish_sdk.transport.auth import AuthManager
 if TYPE_CHECKING:
     from redfish_sdk.transport.http_client import HttpClient
     from redfish_sdk.models.redfish_types import AuthState, TimeoutConfig
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_SERVICE_PATH = "/redfish/v1/UpdateService"
 
@@ -139,3 +144,84 @@ class UpdateServiceHandle:
         return asyncio.run(
             self.simple_update_async(image_uri, targets, transfer_protocol, apply_time)
         )
+
+    # ------------------------------------------------------------------
+    # Multipart Push — FR7.5
+    # ------------------------------------------------------------------
+
+    async def push_firmware_async(
+        self,
+        local_path: str,
+        targets: list[str] | None = None,
+        apply_time: str | None = None,
+    ) -> RedfishResponse:
+        """Upload firmware via multipart HTTP push (FR7.5).
+
+        Steps:
+          1. GET UpdateService to discover ``MultipartHttpPushUri`` (or
+             fall back to ``HttpPushUri``).
+          2. POST multipart/form-data with ``UpdateParameters`` (JSON)
+             and ``UpdateFile`` (binary) fields.
+
+        Returns a :class:`RedfishResponse`; if the server responds 202
+        the ``task`` field on the response is populated.
+        """
+        from redfish_sdk.errors import RedfishHTTPError, RedfishProtocolError
+
+        headers = AuthManager.attach_auth(self._auth_state, {})
+        svc_raw = await self._http.request_async("GET", self._service_uri, headers=headers)
+        if svc_raw.status_code != 200 or not isinstance(svc_raw.body_json, dict):
+            raise RedfishHTTPError(
+                svc_raw.status_code,
+                f"GET {self._service_uri} failed with HTTP {svc_raw.status_code}",
+            )
+
+        push_uri = (
+            svc_raw.body_json.get("MultipartHttpPushUri")
+            or svc_raw.body_json.get("HttpPushUri")
+        )
+        if not push_uri:
+            raise RedfishProtocolError(
+                "UpdateService has neither MultipartHttpPushUri nor HttpPushUri"
+            )
+
+        params: dict = {}
+        if targets:
+            params["Targets"] = targets
+        if apply_time:
+            params["@Redfish.OperationApplyTime"] = apply_time
+
+        filename = os.path.basename(local_path)
+        logger.debug("push_firmware: uploading %s to %s", filename, push_uri)
+        with open(local_path, "rb") as fh:
+            file_content = fh.read()
+
+        files = {
+            "UpdateParameters": (None, _json.dumps(params), "application/json"),
+            "UpdateFile": (filename, file_content, "application/octet-stream"),
+        }
+
+        raw = await self._http.request_multipart_async(
+            "POST", push_uri, headers=headers, files=files
+        )
+        logger.debug("push_firmware: server responded HTTP %d", raw.status_code)
+
+        task: RedfishTask | None = None
+        if raw.status_code == 202:
+            task_uri = raw.headers.get("location") or raw.headers.get("Location") or ""
+            if not task_uri and isinstance(raw.body_json, dict):
+                task_uri = raw.body_json.get("@odata.id", "")
+            if task_uri:
+                task = RedfishTask(task_uri=task_uri)
+                task._bind(self._http, self._auth_state, self._timeouts)
+
+        return build_response(raw.status_code, raw.headers, raw.body_json, raw.body_text, task=task)
+
+    def push_firmware(
+        self,
+        local_path: str,
+        targets: list[str] | None = None,
+        apply_time: str | None = None,
+    ) -> RedfishResponse:
+        """Sync wrapper for :meth:`push_firmware_async`."""
+        return asyncio.run(self.push_firmware_async(local_path, targets, apply_time))

@@ -19,8 +19,12 @@ from redfish_sdk.models.redfish_types import (
 )
 from redfish_sdk.protocol.response import RedfishResponse, build_response
 from redfish_sdk.protocol.registry import MessageRegistry
+import logging
+
 from redfish_sdk.transport.auth import AuthManager
 from redfish_sdk.transport.http_client import HttpClient
+
+logger = logging.getLogger(__name__)
 
 
 class ClientContext:
@@ -187,17 +191,39 @@ class ClientContext:
     def delete(self, uri: str) -> RedfishResponse:
         return asyncio.run(self.delete_async(uri))
 
-    # ------------------------------------------------------------------
-    # Lifecycle
+    # ------------------------------------------------------------------    # Auth refresh — FR1.10
+    # -----------------------------------------------------------------------
+
+    async def refresh_auth_async(self) -> None:
+        """Re-run the auth flow in-place without creating a new connection.
+
+        Useful for token rotation (e.g. 72-hour session renewal). The
+        existing ``ClientContext`` handle remains valid after the call.
+        """
+        logger.debug("refresh_auth: re-authenticating via %s", self._auth_state.mode.value)
+        creds = self._auth_state.credentials or _dummy_creds()
+        auth_manager = AuthManager(self._http, creds, self._auth_state.mode)
+        self._auth_state = await auth_manager.authenticate_async()
+        # Invalidate cached registry (holds a reference to auth_state)
+        self._registry = type(self._registry)(self._http, self._auth_state)
+        logger.debug("refresh_auth: done")
+
+    def refresh_auth(self) -> None:
+        """Sync wrapper for :meth:`refresh_auth_async`."""
+        asyncio.run(self.refresh_auth_async())
+
+    # -----------------------------------------------------------------------    # Lifecycle
     # ------------------------------------------------------------------
 
     async def close_async(self) -> None:
         if not self._connected:
             return
+        logger.debug("Closing connection to %s", self.base_url)
         auth_manager = AuthManager(self._http, self._auth_state.credentials or _dummy_creds(), self._auth_state.mode)  # type: ignore[arg-type]
         await auth_manager.logout_async(self._auth_state)
         await self._http.close_async()
         self._connected = False
+        logger.debug("Connection closed")
 
     def close(self) -> None:
         asyncio.run(self.close_async())

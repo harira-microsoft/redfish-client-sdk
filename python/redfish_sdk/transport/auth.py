@@ -6,9 +6,12 @@ Imports: http_client, models.
 """
 
 from __future__ import annotations
+import logging
 
 from redfish_sdk.models.redfish_types import AuthMode, AuthState, Credentials
 from redfish_sdk.transport.http_client import HttpClient
+
+logger = logging.getLogger(__name__)
 
 
 class AuthManager:
@@ -28,6 +31,7 @@ class AuthManager:
     # ------------------------------------------------------------------
 
     async def authenticate_async(self) -> AuthState:
+        logger.debug("authenticate_async: mode=%s", self._mode.value)
         if self._mode == AuthMode.SESSION:
             return await self._session_auth_async()
         return await self._stateless_auth_async()
@@ -57,6 +61,7 @@ class AuthManager:
     async def logout_async(self, state: AuthState) -> None:
         if state.mode == AuthMode.SESSION and state.session_uri:
             try:
+                logger.debug("logout_async: deleting session %s", state.session_uri)
                 headers = self.attach_auth(state, {})
                 await self._http.request_async("DELETE", state.session_uri, headers=headers)
             except Exception:

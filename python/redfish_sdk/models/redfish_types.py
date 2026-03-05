@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import List
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +53,12 @@ class ConnectionConfig:
     # When True and auth_mode=SESSION, automatically retry with STATELESS
     # if the endpoint has no SessionService or rejects session creation.
     allow_session_fallback: bool = False
+    # FR1.8 — retry on TCP/TLS connection failure
+    retry_on_connection_failure: int = 0
+    # FR1.9 — retry when the server returns one of these HTTP status codes
+    retry_status_codes: list[int] = field(default_factory=list)
+    # FR1.8/FR1.9 — seconds to wait between retry attempts
+    retry_delay_sec: float = 2.0
 
 
 # ---------------------------------------------------------------------------

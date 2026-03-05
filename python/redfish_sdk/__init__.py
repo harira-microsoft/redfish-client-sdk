@@ -29,6 +29,9 @@ from redfish_sdk.models.redfish_types import AuthMode, ConnectionConfig, Credent
 from redfish_sdk.protocol.response import RedfishMessage, RedfishResponse
 from redfish_sdk.protocol.task import RedfishTask, TaskState
 from redfish_sdk.services.event_service import RedfishEvent
+from redfish_sdk.services.log_service import ParsedSelRecord, parse_sel_entry
+from redfish_sdk.transport.http_client import MockHttpClient
+from redfish_sdk.models.redfish_types import RawHttpResponse
 
 __all__ = [
     "connect",
@@ -43,6 +46,10 @@ __all__ = [
     "RedfishTask",
     "TaskState",
     "RedfishEvent",
+    "ParsedSelRecord",
+    "parse_sel_entry",
+    "MockHttpClient",
+    "RawHttpResponse",
     "RedfishSDKError",
     "RedfishConnectionError",
     "RedfishTLSError",

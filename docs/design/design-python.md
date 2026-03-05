@@ -1,9 +1,9 @@
 # Redfish Client SDK — Python Design
 
 **Document ID:** RSDK-DESIGN-001  
-**Version:** 0.1 (Draft)  
+**Version:** 0.2  
 **Status:** Locked  
-**Date:** March 4, 2026  
+**Date:** March 5, 2026  
 **Author:** Hari  
 **Requirement Ref:** RSDK-REQ-001  
 **Architecture Ref:** RSDK-ARCH-001, RSDK-ARCH-002  
@@ -251,6 +251,10 @@ ClientContext:
     # Lifecycle
     close()                         -> None
     close_async()                   -> Awaitable[None]
+
+    # Auth refresh — FR1.10
+    refresh_auth()                  -> None
+    refresh_auth_async()            -> Awaitable[None]
 ```
 
 ---
@@ -327,6 +331,10 @@ defaults for TLS, timeouts, and path handling.
 | `task_poll_interval_sec` | `float` | `5.0` | Default task polling interval |
 | `task_timeout_sec` | `float` | `300.0` | Default task completion timeout |
 | `base_path_override` | `str \| None` | `None` | Override base path (e.g., `/redfish/v1`) |
+| `allow_session_fallback` | `bool` | `False` | Retry stateless if session auth fails |
+| `retry_on_connection_failure` | `int` | `0` | Extra TCP/TLS connection attempts before raising (FR1.8) |
+| `retry_status_codes` | `list[int]` | `[]` | Retry request when server returns one of these HTTP status codes (FR1.9) |
+| `retry_delay_sec` | `float` | `2.0` | Seconds to wait between retry attempts (FR1.8/FR1.9) |
 
 ---
 
@@ -757,7 +765,39 @@ LogServiceHandle:
     # Clear a log service
     clear_log(log_service_uri: str) -> RedfishResponse
     clear_log_async(log_service_uri: str) -> Awaitable[RedfishResponse]
+
+    # SEL binary record parsing — FR6.6 (module-level function, not a method)
+    # parse_sel_entry(raw_hex: str) -> ParsedSelRecord
+    # Accepts raw hex or "Raw Data : Hex <hex>" (OpenBMC format)
+    # Raises RedfishSDKError on invalid / too-short input
 ```
+
+---
+
+### ParsedSelRecord (FR6.6)
+
+```
+ParsedSelRecord:
+    record_type     : str           # "PxeBoot" | "HostOsModeChange" | "HostOsHandOff" | "Unknown"
+    record_id       : int           # 16-bit LE from bytes 0-1
+    timestamp_raw   : int           # Unix epoch from bytes 3-6 LE
+    raw_hex         : str           # normalised uppercase hex (32 chars = 16 bytes)
+    raw_bytes       : list[int]
+    sensor_type     : int | None
+    sensor_number   : int | None
+    event_dir_type  : int | None
+    event_data      : list[int]
+    description     : str
+```
+
+SEL record type byte decoding (OpenBMC OEM timestamped events):
+
+| Byte 2 (record type) | Byte 13 (subtype) | `record_type` |
+|---|---|---|
+| `0xCA` | — | `"PxeBoot"` |
+| `0xD9` | `0x01` | `"HostOsModeChange"` |
+| `0xD9` | `0x02` | `"HostOsHandOff"` |
+| anything else | — | `"Unknown"` |
 
 ---
 
@@ -896,6 +936,18 @@ UpdateServiceHandle:
         apply_time      : str | None = None
     ) -> RedfishResponse
     simple_update_async(...) -> Awaitable[RedfishResponse]
+
+    # Multipart firmware push — FR7.5
+    # Fetches UpdateService to discover MultipartHttpPushUri / HttpPushUri,
+    # then POSTs the file as multipart/form-data.
+    # Raises RedfishHTTPError if UpdateService is unreachable (non-200).
+    # Raises RedfishProtocolError if no push URI is advertised.
+    push_firmware(
+        local_path  : str,                  # path to local firmware file
+        targets     : list[str] | None = None,
+        apply_time  : str | None = None
+    ) -> RedfishResponse                    # 202 + response.task if accepted
+    push_firmware_async(...) -> Awaitable[RedfishResponse]
 ```
 
 ---
@@ -1015,23 +1067,22 @@ delivering push events to an HTTPS destination.
 
 ### Purpose
 
-Internal module. Wraps `httpx` and provides a uniform async request
-interface used by all layers above it. Never imported directly by callers.
+Provides the transport abstraction layer (NFR8.2). Three classes:
+
+- **`HttpClient`** (ABC) — injectable interface; all SDK layers depend on this type only.
+- **`DefaultHttpClient`** — production implementation wrapping `httpx`; handles retry (FR1.8, FR1.9) and multipart upload (FR7.5).
+- **`MockHttpClient`** — in-memory test double; returns canned `RawHttpResponse` values keyed by `(METHOD, path)`; no network required.
+
+Never imported directly by callers outside the transport layer.
 
 ---
 
 ### Internal Interface (used by Protocol and Service layers)
 
 ```
-HttpClient:
+HttpClient (ABC):
 
-    __init__(
-        base_url    : str,
-        tls_config  : TLSConfig,
-        timeouts    : TimeoutConfig
-    )
-
-    # Core request method — async
+    # Core request methods — async
     request_async(
         method   : str,             # "GET" | "POST" | "PATCH" | "DELETE"
         path     : str,             # relative path e.g. "/redfish/v1/Systems"
@@ -1039,15 +1090,43 @@ HttpClient:
         body     : dict | None
     ) -> RawHttpResponse
 
-    # Sync wrapper
-    request(
+    # Multipart upload — FR7.5
+    request_multipart_async(
         method   : str,
         path     : str,
         headers  : dict | None,
-        body     : dict | None
+        files    : dict             # httpx files= format
     ) -> RawHttpResponse
 
+    # Sync wrappers
+    request(...) -> RawHttpResponse
+
     close_async() -> Awaitable[None]
+    close()       -> None
+
+
+DefaultHttpClient(HttpClient):
+
+    __init__(
+        base_url    : str,
+        tls_config  : TLSConfig,
+        timeouts    : TimeoutConfig,
+        config      : ConnectionConfig | None   # reads retry fields
+    )
+
+    # Retry logic (FR1.8, FR1.9):
+    #   - ConnectError/ConnectTimeout: retry up to retry_on_connection_failure times
+    #   - HTTP status in retry_status_codes: retry with the same count
+    #   - retry_delay_sec sleep between attempts
+    # Logging: debug on each attempt, warning on failure, error when all attempts fail
+
+
+MockHttpClient(HttpClient):
+
+    __init__(responses: dict[tuple[str,str], RawHttpResponse] | None)
+    register(method: str, path: str, response: RawHttpResponse) -> None
+    # Unregistered (method, path) → HTTP 404
+```
     close() -> None
 ```
 
@@ -1422,3 +1501,4 @@ Caller          UpdateServiceHandle    TaskManager     BMC
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — Python design |
+| 0.2 | 2026-03-05 | Hari | Add retry (FR1.8/FR1.9), refresh_auth (FR1.10), HttpClient→ABC+DefaultHttpClient+MockHttpClient (NFR8.2), SEL parsing in LogService (FR6.6), multipart in UpdateService (FR7.5), logging instrumentation (NFR8.1) |
