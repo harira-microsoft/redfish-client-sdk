@@ -252,6 +252,8 @@ listener.on_event(|event: RedfishEvent| async move {
 })
 ```
 
+Push delivery via `RedfishEventListener` is the supported event reception mechanism. SSE streaming is not a supported SDK feature.
+
 ---
 
 ## 6. Async and Sync Model in Rust
@@ -440,3 +442,4 @@ cargo publish
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — Rust architecture |
+| 0.5 | 2026-03-05 | Copilot | §5 Event Listener: clarified push delivery is the supported model; SSE not a supported SDK feature |

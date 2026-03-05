@@ -521,12 +521,6 @@ public:
     RedfishResponse delete_subscription(std::string_view subscription_uri);
     boost::asio::awaitable<RedfishResponse> delete_subscription_async(std::string_view subscription_uri);
 
-    // SSE streaming — calls on_event for each received event; runs until cancelled
-    boost::asio::awaitable<void> subscribe_sse(
-        std::function<void(const RedfishEvent&)> on_event,
-        nlohmann::json                           filters = {}
-    );
-
     // Submit test event (simulator / test use)
     RedfishResponse submit_test_event(const nlohmann::json& event_data);
     boost::asio::awaitable<RedfishResponse> submit_test_event_async(const nlohmann::json& event_data);
@@ -547,11 +541,6 @@ struct RedfishEvent {
     nlohmann::json             raw;
 };
 ```
-
-### SSE vs Push
-
-- `subscribe_sse` streams events over a persistent HTTP connection (simulator/test).
-- Push delivery uses `RedfishEventListener` (production BMC environments).
 
 ---
 
@@ -664,12 +653,6 @@ public:
 
     RedfishResponse get_metric_report(std::string_view report_uri);
     boost::asio::awaitable<RedfishResponse> get_metric_report_async(std::string_view report_uri);
-
-    // Streaming — calls on_report for each report received; runs until cancelled
-    boost::asio::awaitable<void> stream_metric_reports(
-        std::function<void(const MetricReport&)>  on_report,
-        std::optional<std::string_view>           definition_uri = std::nullopt
-    );
 };
 ```
 
@@ -1333,3 +1316,4 @@ const char* redfish_last_error(redfish_ctx_t ctx);
 | 0.2 | 2026-03-06 | Hari | Retry/refresh (FR1.8–1.10); IHttpClient/MockHttpClient (NFR8.2); `push_firmware()` multipart (FR7.5); SEL parsing (FR8.2); env-controlled logging (NFR5.1); always-HTTPS transport |
 | 0.3 | 2026-03-07 | Copilot | §11 subscribe() gains `resource_types` + `event_format_type` (FR5.1); §15 RedfishEventListener redesigned — POSIX socket, context validation, latency logging, per-IP counter, ring buffer, buffered GET (FR5.3) |
 | 0.4 | 2026-03-05 | Copilot | §12 `LogQuery` struct added; `list_entries()` updated to accept `LogQuery`; `iter_entries()` added for nextLink auto-pagination (FR6.8); OData ordering enforcement documented (FR6.7) |
+| 0.5 | 2026-03-05 | Copilot | §11 `subscribe_sse()` removed (never implemented — SSE not a supported SDK feature); §13 `stream_metric_reports()` removed (same reason) |

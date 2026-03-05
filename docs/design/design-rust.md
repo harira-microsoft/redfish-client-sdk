@@ -548,12 +548,6 @@ impl<'ctx> EventServiceHandle<'ctx> {
     pub async fn delete_subscription(&self, subscription_uri: &str)
         -> Result<RedfishResponse, RedfishError>;
 
-    // SSE streaming — yields RedfishEvent items; runs until the stream ends or is dropped
-    pub async fn subscribe_sse(
-        &self,
-        filters: Option<serde_json::Value>,
-    ) -> Result<impl futures::Stream<Item = Result<RedfishEvent, RedfishError>>, RedfishError>;
-
     pub async fn submit_test_event(&self, event_data: serde_json::Value)
         -> Result<RedfishResponse, RedfishError>;
 
@@ -582,10 +576,7 @@ pub struct RedfishEvent {
 }
 ```
 
-### SSE vs Push
-
-- `subscribe_sse` returns a `Stream` of events over a persistent HTTP connection.
-- Push delivery uses `RedfishEventListener` (production BMC environments).
+> Push delivery uses `RedfishEventListener`. SSE streaming is not a supported SDK feature.
 
 ---
 
@@ -664,12 +655,6 @@ impl<'ctx> TelemetryServiceHandle<'ctx> {
 
     pub async fn get_metric_report(&self, report_uri: &str)
         -> Result<RedfishResponse, RedfishError>;
-
-    // Streaming — yields MetricReport items; runs until stream ends or is dropped
-    pub async fn stream_metric_reports(
-        &self,
-        definition_uri: Option<&str>,
-    ) -> Result<impl futures::Stream<Item = Result<MetricReport, RedfishError>>, RedfishError>;
 
     // Sync variants
     pub fn get_service_info_blocking(&self)                  -> Result<RedfishResponse, RedfishError>;
@@ -1157,3 +1142,4 @@ No runtime checks are involved — all are compile-time.
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — Rust design |
 | 0.2 | 2026-03-05 | Copilot | Added retry fields to ConnectionConfig (§6); added refresh_auth() to ClientContext (§5); refactored HttpClient from struct to pub(crate) trait with DefaultHttpClient + MockHttpClient (§16); aligned with FR1.8–FR1.10, NFR8 |
+| 0.5 | 2026-03-05 | Copilot | §11 `subscribe_sse()` removed (SSE not a supported SDK feature — not fully defined by Redfish, never implemented in Python/C++); §13 `stream_metric_reports()` removed (same reason) |
