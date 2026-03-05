@@ -13,7 +13,7 @@ import ssl
 import httpx
 
 from redfish_sdk.context import ClientContext
-from redfish_sdk.errors import RedfishConnectionError, RedfishProtocolError, RedfishTLSError
+from redfish_sdk.errors import RedfishAuthError, RedfishConnectionError, RedfishProtocolError, RedfishTLSError
 from redfish_sdk.models.redfish_types import (
     AuthMode,
     ConnectionConfig,
@@ -67,6 +67,19 @@ async def connect_async(
     except httpx.ConnectTimeout as exc:
         await http.close_async()
         raise RedfishConnectionError(f"Connection timed out to {host}:{port}") from exc
+    except RedfishAuthError:
+        # SESSION auth failed (no SessionService, 404, or rejected).
+        # If the caller opted in to fallback, transparently retry stateless.
+        if auth_mode == AuthMode.SESSION and cfg.allow_session_fallback:
+            try:
+                fallback_manager = AuthManager(http, credentials, AuthMode.STATELESS)
+                auth_state = await fallback_manager.authenticate_async()
+            except Exception:
+                await http.close_async()
+                raise
+        else:
+            await http.close_async()
+            raise
 
     capabilities = await _detect_capabilities_async(http, auth_state, cfg)
 

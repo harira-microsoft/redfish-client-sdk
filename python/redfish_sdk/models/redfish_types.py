@@ -49,6 +49,9 @@ class ConnectionConfig:
     task_poll_interval_sec: float = 5.0
     task_timeout_sec: float = 300.0
     base_path_override: str | None = None
+    # When True and auth_mode=SESSION, automatically retry with STATELESS
+    # if the endpoint has no SessionService or rejects session creation.
+    allow_session_fallback: bool = False
 
 
 # ---------------------------------------------------------------------------
