@@ -158,6 +158,9 @@ Phase 3 — Rust SDK          (After team is aligned to Rust)
 | FR1.5 | MUST | SDK shall support **TLS certificate bypass** for development and test scenarios involving self-signed certificates |
 | FR1.6 | MUST | SDK shall support configurable **connection timeout** and **request timeout** |
 | FR1.7 | SHOULD | SDK shall support **session keep-alive** — caller can choose to maintain an active session across multiple operations |
+| FR1.8 | SHOULD | SDK shall support configurable **retry on connection failure** — caller specifies retry count and delay between attempts |
+| FR1.9 | SHOULD | SDK shall support configurable **retry on specific HTTP status codes** (e.g. 503, 429) — caller specifies list of status codes, retry count, and delay |
+| FR1.10 | SHOULD | SDK shall support **in-place session refresh** — renew the auth token on the existing client context without tearing down and reconnecting |
 
 ---
 
@@ -227,6 +230,7 @@ Phase 3 — Rust SDK          (After team is aligned to Rust)
 | FR6.3 | MUST | SDK shall provide APIs to **clear logs** (`POST LogService/Actions/LogService.ClearLog`) where the BMC supports it |
 | FR6.4 | MUST | SDK shall support **multiple log services** on a single BMC — e.g., System EventLog, Manager logs, CPERLogs — accessible by URI or by discovery |
 | FR6.5 | SHOULD | SDK shall support **pagination** of log entry collections for BMCs that implement `Members@odata.nextLink` |
+| FR6.6 | COULD | SDK shall provide **typed binary log entry parsing** for known vendor formats (IPMI SEL records) — extracting record type, manufacturer ID, event ID, and platform-specific fields from raw hex data in `MessageArgs` |
 
 ---
 
@@ -238,6 +242,7 @@ Phase 3 — Rust SDK          (After team is aligned to Rust)
 | FR7.2 | MUST | SDK shall provide APIs to **query software inventory** (`GET UpdateService/SoftwareInventory`) |
 | FR7.3 | MUST | SDK shall provide APIs to **initiate firmware updates** via the `SimpleUpdate` action |
 | FR7.4 | MUST | Update operations that return Tasks shall be automatically handled via the Task Management APIs (FR4) |
+| FR7.5 | SHOULD | SDK shall support **multipart firmware upload** — stream a local firmware image file directly to the BMC UpdateService URI, in addition to the URI-based `SimpleUpdate` action |
 
 ---
 
@@ -366,6 +371,15 @@ Phase 3 — Rust SDK          (After team is aligned to Rust)
 
 ---
 
+### NFR8 — Observability & Testability
+
+| ID | Priority | Requirement |
+|---|---|---|
+| NFR8.1 | MUST | SDK shall instrument all transport and service operations with **structured log calls** using a standard observability interface (`tracing` in Rust, `logging` in Python, structured output in C++) — the SDK shall never configure a log handler itself; callers opt in by installing their own subscriber or handler |
+| NFR8.2 | MUST | The **transport layer shall be testable without a live endpoint** — each language shall provide a mock/injectable transport interface so unit tests run without a running BMC or simulator |
+
+---
+
 ## 7. Out of Scope (Initial Release)
 
 The following items are explicitly **not in scope** for any phase of this SDK:
@@ -404,6 +418,7 @@ The following items are explicitly **not in scope** for any phase of this SDK:
 | NFR5 — Endpoint Agnosticism | ✅ | ✅ | ✅ |
 | NFR6 — Security & Storage | ✅ | ✅ | ✅ |
 | NFR7 — Sample Quality | ✅ | ✅ | ✅ |
+| NFR8 — Observability & Testability | ✅ | ✅ | ✅ |
 
 ---
 
@@ -412,3 +427,4 @@ The following items are explicitly **not in scope** for any phase of this SDK:
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — requirements captured from design discussion |
+| 0.2 | 2026-03-05 | Copilot | Added FR1.8–FR1.10 (retry, auth refresh), FR6.6 (SEL parsing), FR7.5 (multipart upload), NFR8 (observability & testability) — informed by team Rust client analysis |

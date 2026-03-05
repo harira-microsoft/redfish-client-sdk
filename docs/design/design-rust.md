@@ -227,6 +227,10 @@ impl ClientContext {
     pub fn post_blocking (&self, uri: &str, body: serde_json::Value) -> Result<RedfishResponse, RedfishError>;
     pub fn patch_blocking(&self, uri: &str, body: serde_json::Value) -> Result<RedfishResponse, RedfishError>;
     pub fn del_blocking  (&self, uri: &str)                       -> Result<RedfishResponse, RedfishError>;
+
+    // Auth management
+    pub async fn refresh_auth(&mut self) -> Result<(), RedfishError>;
+    pub fn refresh_auth_blocking(&mut self) -> Result<(), RedfishError>;
 }
 ```
 
@@ -274,7 +278,10 @@ pub struct ConnectionConfig {
     pub request_timeout_secs:    f32,            // default: 30.0
     pub task_poll_interval_secs: f32,            // default: 5.0
     pub task_timeout_secs:       f32,            // default: 300.0
-    pub base_path_override:      Option<String>, // default: None → /redfish/v1
+    pub base_path_override:            Option<String>, // default: None → /redfish/v1
+    pub retry_on_connection_failure:   u32,            // default: 0 — retries after network-level failure
+    pub retry_status_codes:            Vec<u16>,       // default: [] — e.g. vec![503, 429]
+    pub retry_delay_secs:              u64,            // default: 2 — delay between retry attempts
 }
 
 impl Default for ConnectionConfig {
@@ -825,34 +832,53 @@ shared safely between the listener task and the registration methods.
 ### Module: `transport/http_client.rs`
 ### Visibility: `pub(crate)`
 
+The transport layer is expressed as a **trait** so that service layers and `ClientContext` can be unit-tested without a live endpoint. `DefaultHttpClient` is the production implementation. `MockHttpClient` is used in tests.
+
 ```rust
-pub(crate) struct HttpClient {
+// Trait — the contract used by all service handles and ClientContext
+#[async_trait]
+pub(crate) trait HttpClient: Send + Sync {
+    async fn request(
+        &self,
+        method:  &str,
+        path:    &str,
+        headers: HashMap<String, String>,
+        body:    Option<serde_json::Value>,
+    ) -> Result<RawHttpResponse, RedfishError>;
+
+    fn request_blocking(
+        &self,
+        method:  &str,
+        path:    &str,
+        headers: HashMap<String, String>,
+        body:    Option<serde_json::Value>,
+    ) -> Result<RawHttpResponse, RedfishError>;
+}
+
+// Production implementation — reqwest + retry logic
+pub(crate) struct DefaultHttpClient {
     client:   reqwest::Client,
     base_url: String,
     timeouts: TimeoutConfig,
+    retry_on_connection_failure: u32,
+    retry_status_codes:          Vec<u16>,
+    retry_delay_secs:            u64,
 }
 
-impl HttpClient {
-    pub(crate) fn new(base_url: &str, tls_config: TlsConfig, timeouts: TimeoutConfig)
-        -> Result<Self, RedfishError>;
+impl DefaultHttpClient {
+    pub(crate) fn new(
+        base_url:   &str,
+        tls_config: TlsConfig,
+        timeouts:   TimeoutConfig,
+        config:     &ConnectionConfig,
+    ) -> Result<Self, RedfishError>;
+}
 
-    // Async (primary)
-    pub(crate) async fn request(
-        &self,
-        method:  &str,
-        path:    &str,
-        headers: HashMap<String, String>,
-        body:    Option<serde_json::Value>,
-    ) -> Result<RawHttpResponse, RedfishError>;
-
-    // Sync
-    pub(crate) fn request_blocking(
-        &self,
-        method:  &str,
-        path:    &str,
-        headers: HashMap<String, String>,
-        body:    Option<serde_json::Value>,
-    ) -> Result<RawHttpResponse, RedfishError>;
+// Test double — used in unit tests; no network required
+#[cfg(test)]
+pub(crate) struct MockHttpClient {
+    // Map of (method, path) → canned RawHttpResponse
+    responses: HashMap<(String, String), RawHttpResponse>,
 }
 ```
 
@@ -869,15 +895,13 @@ pub(crate) struct RawHttpResponse {
 
 ### Responsibilities
 
-- Maintain a single `reqwest::Client` for connection reuse
-- Attach standard Redfish headers to every request:
+- `DefaultHttpClient` maintains a single `reqwest::Client` for connection reuse
+- Attaches standard Redfish headers to every request:
   `OData-Version: 4.0`, `Content-Type: application/json`, `Accept: application/json`
+- Implements retry loop: connection failures up to `retry_on_connection_failure` times;
+  status-code retries for any code in `retry_status_codes`; waits `retry_delay_secs` between each attempt
 - Auth header attachment is **not** done here — done by `AuthManager`
-
----
-
-## 17. Transport Layer — AuthManager
-
+- `MockHttpClient` matches on `(method, path)` and returns the canned response — no network I/O
 ### Module: `transport/auth.rs`
 ### Visibility: `pub(crate)`
 
@@ -1132,3 +1156,4 @@ No runtime checks are involved — all are compile-time.
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 0.1 | 2026-03-04 | Hari | Initial draft — Rust design |
+| 0.2 | 2026-03-05 | Copilot | Added retry fields to ConnectionConfig (§6); added refresh_auth() to ClientContext (§5); refactored HttpClient from struct to pub(crate) trait with DefaultHttpClient + MockHttpClient (§16); aligned with FR1.8–FR1.10, NFR8 |
