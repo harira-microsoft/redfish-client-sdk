@@ -49,7 +49,7 @@ to your callback. Tasks polled automatically.
 |---|---|---|
 | 1 | Python | ✅ Complete |
 | 2 | C++ | ✅ Complete |
-| 3 | Rust | 📋 Designed |
+| 3 | Rust | ✅ Complete |
 
 Each language is a **first-class idiomatic implementation** — not a binding
 over another language. Python first, because it is the fastest path to a
@@ -87,7 +87,12 @@ RedfishClientSDK/
 │   ├── src/                               ← Implementations
 │   ├── samples/                           ← 8 samples
 │   └── docs/api-guide.md                  ← C++ API reference
-└── rust/                                   ← Rust SDK (coming)
+├── rust/                                   ← Rust SDK ✅
+│   ├── redfish-sdk/src/               ← SDK source (2,867 lines)
+│   ├── samples/src/bin/               ← 15 samples
+│   └── target/release/               ← compiled binaries
+└── docs/
+    └── performance.md                ← language comparison & benchmarks
 ```
 
 Start with the docs. The requirements tell you *what*. The architecture
@@ -104,6 +109,7 @@ implement*.
 |---|---|
 | [Requirements](docs/requirements.md) | Full feature and non-functional requirements |
 | [SDK Architecture](docs/architecture/architecture-sdk.md) | Language-independent component model |
+| [Performance & Comparison](docs/performance.md) | Measured latency, memory, LOC, safety across Python / C++ / Rust |
 
 ### By Language
 
@@ -111,7 +117,41 @@ implement*.
 |---|---|---|---|
 | Python | [architecture-python.md](docs/architecture/architecture-python.md) | [design-python.md](docs/design/design-python.md) | [api-guide.md](python/docs/api-guide.md) |
 | C++ | [architecture-cpp.md](docs/architecture/architecture-cpp.md) | [design-cpp.md](docs/design/design-cpp.md) | [api-guide.md](cpp/docs/api-guide.md) |
-| Rust | [architecture-rust.md](docs/architecture/architecture-rust.md) | [design-rust.md](docs/design/design-rust.md) | — |
+| Rust | [architecture-rust.md](docs/architecture/architecture-rust.md) | [design-rust.md](docs/design/design-rust.md) | [api-guide.md](rust/redfish-sdk/src/lib.rs) |
+
+---
+
+## Performance
+
+All three SDKs were benchmarked against the same Ares_AI_Blade mockup simulator
+(HTTPS, loopback). Full data in [docs/performance.md](docs/performance.md).
+
+### Latency (median, 5 runs — loopback simulator)
+
+| Sample | Python | C++ | Rust |
+|---|---:|---:|---:|
+| connect + discover | 680 ms | 20 ms | 130 ms |
+| GET resources | 590 ms | 20 ms | 150 ms |
+| direct API (GET/PATCH/DELETE) | 550 ms | 30 ms | 90 ms |
+
+Python's numbers are dominated by interpreter + module import startup (~500 ms).
+The actual HTTP round-trips are 15–25 ms in all three languages.
+
+### Peak Memory (mean RSS)
+
+| Python | C++ | Rust |
+|---:|---:|---:|
+| ~51.5 MB | ~14.1 MB | ~12.2 MB |
+
+### When to choose which
+
+| | Python | C++ | Rust |
+|---|---|---|---|
+| Startup latency | 🔴 ~600 ms | 🟢 ~25 ms | 🟡 ~120 ms |
+| Peak memory | 🔴 ~51 MB | 🟡 ~14 MB | 🟢 ~12 MB |
+| Deployment | needs venv | needs system libs | single static binary |
+| Memory safety | GC / refcount | manual + RAII | borrow checker |
+| Best for | scripting, automation | BMC firmware, C interop | fleet agents, safety-critical |
 
 ---
 
@@ -219,6 +259,28 @@ cmake --build build --parallel
 
 See [cpp/docs/api-guide.md](cpp/docs/api-guide.md) for the full C++ API reference.
 
+### Rust
+
+```bash
+# Build all samples (release)
+cd rust/
+cargo build --release
+
+# Run a sample
+./target/release/01_connect_discover --host 127.0.0.1 --port 8000 --no-tls-verify
+./target/release/05_event_subscribe  --host 127.0.0.1 --port 8000 --no-tls-verify
+
+# Run the test suite (68 tests)
+cargo test
+```
+
+### Benchmark all three SDKs
+
+```bash
+# From the repo root — requires simulator running on 127.0.0.1:8000
+python3 bench/run_bench.py --runs 5
+```
+
 ---
 
 ## Redfish Quick Reference
@@ -267,3 +329,4 @@ Follow the engineering discipline this project was built on:
 | RSDK-DESIGN-001 | Python Design |
 | RSDK-DESIGN-002 | C++ Design |
 | RSDK-DESIGN-003 | Rust Design |
+| RSDK-PERF-001 | Performance & Language Comparison |
