@@ -23,7 +23,9 @@ int main(int argc, char* argv[]) {
 
     // FR1.8 / FR1.9 — retry configuration
     redfish::ConnectionConfig config;
-    config.verify_tls                  = false;
+    config.verify_tls                  = false;  // disable cert verification for simulator (self-signed)
+    for (int i = 1; i < argc; ++i)
+        if (std::string(argv[i]) == "--no-tls") config.use_tls = false;  // plain HTTP
     config.retry_on_connection_failure = 2;
     config.retry_status_codes          = {503, 429};
     config.retry_delay_sec             = 1.0;

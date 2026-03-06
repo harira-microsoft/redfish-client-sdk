@@ -53,8 +53,10 @@ std::unique_ptr<ClientContext> connect(
 
     TLSConfig tls = build_tls_config(config);
 
-    // Always HTTPS. verify_tls controls cert verification, not the protocol.
-    std::string base_url = "https://" + host + ":" + std::to_string(port);
+    // Protocol is determined by config.use_tls (default: true = HTTPS).
+    // verify_tls controls cert verification when use_tls is true.
+    std::string scheme = config.use_tls ? "https" : "http";
+    std::string base_url = scheme + "://" + host + ":" + std::to_string(port);
 
     // Non-fatal HTTP probe for service discovery (/redfish/v1 is often HTTP)
     http_probe(host, port, "/redfish/v1", timeouts.connect_sec);

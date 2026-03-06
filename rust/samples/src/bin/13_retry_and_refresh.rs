@@ -6,8 +6,10 @@ fn main() -> Result<(), RedfishError> {
         .init();
 
     let creds = Credentials::new("admin", "password");
+    let no_tls_proto = std::env::args().any(|a| a == "--no-tls");
     let config = ConnectionConfig {
         verify_tls: false,
+        use_tls: !no_tls_proto,
         retry_on_connection_failure: 2,
         retry_status_codes: vec![503, 429],
         retry_delay_secs: 1,

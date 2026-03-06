@@ -43,6 +43,8 @@ class Credentials:
 
 @dataclass
 class ConnectionConfig:
+    # When False, plain HTTP is used; verify_tls is ignored.
+    use_tls: bool = True
     verify_tls: bool = True
     tls_ca_cert: str | None = None
     connect_timeout_sec: float = 10.0

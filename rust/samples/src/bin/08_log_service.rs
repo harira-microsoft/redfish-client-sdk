@@ -27,8 +27,9 @@ fn parse_args() -> (String, u16, String, String, bool, usize) {
 async fn main() -> Result<(), RedfishError> {
     tracing_subscriber::fmt::init();
     let (host, port, user, password, no_tls, max_entries) = parse_args();
+    let no_tls_proto = std::env::args().any(|a| a == "--no-tls");
     let ctx = connect(&host, port, Credentials::new(&user, &password),
-        AuthMode::Session, ConnectionConfig { verify_tls: !no_tls, ..Default::default() }).await?;
+        AuthMode::Session, ConnectionConfig { verify_tls: !no_tls, use_tls: !no_tls_proto, ..Default::default() }).await?;
     let logs = ctx.log_service();
 
     println!("Listing log services ...");

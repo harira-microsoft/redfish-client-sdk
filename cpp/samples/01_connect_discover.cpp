@@ -21,7 +21,9 @@ int main(int argc, char* argv[]) {
 
     redfish::Credentials    creds{"admin", "admin"};
     redfish::ConnectionConfig config;
-    config.verify_tls = false;  // plain HTTP for simulator
+    config.verify_tls = false;  // disable cert verification for simulator (self-signed)
+    for (int i = 1; i < argc; ++i)
+        if (std::string(argv[i]) == "--no-tls") config.use_tls = false;  // plain HTTP
 
     try {
         auto ctx = redfish::connect(host, port, creds, redfish::AuthMode::SESSION, config);

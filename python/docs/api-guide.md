@@ -62,7 +62,8 @@ ctx = await redfish_sdk.connect_async(
 
 ```python
 ConnectionConfig(
-    verify_tls             = True,   # set False for self-signed certs (dev only)
+    use_tls                = True,   # False = plain HTTP (simulators, some lab setups)
+    verify_tls             = True,   # False = accept self-signed certs (dev only, never production)
     tls_ca_cert            = None,   # path to custom CA cert file
     connect_timeout_sec    = 10.0,
     request_timeout_sec    = 30.0,
@@ -71,6 +72,11 @@ ConnectionConfig(
     base_path_override     = None,   # override /redfish/v1 if needed
 )
 ```
+
+> **`use_tls` vs `verify_tls`:** `use_tls=False` uses plain HTTP — the server
+> never sees a TLS handshake. `verify_tls=False` uses HTTPS but skips cert
+> validation. Use `use_tls=False` for the DMTF mockup server. Use
+> `verify_tls=False` for real BMCs with self-signed certs in a lab.
 
 ### Exceptions raised by connect()
 

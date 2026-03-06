@@ -8,6 +8,9 @@
 A multi-language SDK for building clients against any Redfish-compliant
 endpoint — real BMC hardware (AMD, iLO, iDRAC) or a simulator.
 
+> 🚀 **New here?** Start with [docs/QUICKSTART.md](docs/QUICKSTART.md) — first
+> working request in under 5 minutes, for all three languages.
+
 ---
 
 ## What is Redfish?

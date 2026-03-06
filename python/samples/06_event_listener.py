@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--user", default="admin")
     p.add_argument("--password", default="password")
     p.add_argument("--no-tls-verify", action="store_true")
+    p.add_argument("--no-tls", action="store_true", help="Use plain HTTP instead of HTTPS (for simulators without SSL)")
     p.add_argument(
         "--listen-host",
         default="0.0.0.0",
@@ -64,7 +65,7 @@ async def main() -> None:
     args = parse_args()
 
     creds = Credentials(username=args.user, password=args.password)
-    config = ConnectionConfig(verify_tls=not args.no_tls_verify)
+    config = ConnectionConfig(verify_tls=not args.no_tls_verify, use_tls=not args.no_tls)
 
     try:
         ctx = await redfish_sdk.connect_async(

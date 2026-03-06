@@ -50,7 +50,8 @@ async fn run_mode(label: &str, host: &str, port: u16, user: &str, password: &str
 async fn main() -> Result<(), RedfishError> {
     tracing_subscriber::fmt::init();
     let (host, port, user, password, no_tls) = parse_args();
-    let config = ConnectionConfig { verify_tls: !no_tls, ..Default::default() };
+    let no_tls_proto = std::env::args().any(|a| a == "--no-tls");
+    let config = ConnectionConfig { verify_tls: !no_tls, use_tls: !no_tls_proto, ..Default::default() };
 
     run_mode("AuthMode::SESSION", &host, port, &user, &password, AuthMode::Session, config.clone()).await?;
     run_mode("AuthMode::STATELESS", &host, port, &user, &password, AuthMode::Stateless, config.clone()).await?;

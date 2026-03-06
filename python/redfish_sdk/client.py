@@ -49,9 +49,8 @@ async def connect_async(
         task_timeout_sec=cfg.task_timeout_sec,
     )
     tls_config = build_tls_config(cfg)
-    # Always HTTPS — verify_tls controls cert verification, not the protocol.
-    # (verify_tls=False = use HTTPS with unverified/self-signed cert)
-    base_url = f"https://{host}:{port}"
+    scheme = "https" if cfg.use_tls else "http"
+    base_url = f"{scheme}://{host}:{port}"
 
     # Best-effort HTTP probe to /redfish/v1 for service discovery.
     # Real BMCs expose this unauthenticated endpoint over plain HTTP.

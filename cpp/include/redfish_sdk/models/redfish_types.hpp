@@ -54,6 +54,8 @@ struct TimeoutConfig {
 // ── Connection config ────────────────────────────────────────────────────────
 
 struct ConnectionConfig {
+    // When false, plain HTTP is used; verify_tls is ignored.
+    bool        use_tls                 = true;
     bool        verify_tls              = true;
     std::string tls_ca_cert;
     std::string tls_client_cert;

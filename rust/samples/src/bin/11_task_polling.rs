@@ -41,8 +41,9 @@ async fn trigger_task(ctx: &redfish_sdk::ClientContext) -> Option<RedfishTask> {
 async fn main() -> Result<(), RedfishError> {
     tracing_subscriber::fmt::init();
     let (host, port, user, password, no_tls, timeout_secs) = parse_args();
+    let no_tls_proto = std::env::args().any(|a| a == "--no-tls");
     let ctx = connect(&host, port, Credentials::new(&user, &password),
-        AuthMode::Session, ConnectionConfig { verify_tls: !no_tls, ..Default::default() }).await?;
+        AuthMode::Session, ConnectionConfig { verify_tls: !no_tls, use_tls: !no_tls_proto, ..Default::default() }).await?;
 
     println!("Attempting to trigger a task ...");
     let task = match trigger_task(&ctx).await {

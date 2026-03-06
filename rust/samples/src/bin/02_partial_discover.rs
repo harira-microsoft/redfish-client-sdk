@@ -24,8 +24,9 @@ fn parse_args() -> (String, u16, String, String, bool) {
 async fn main() -> Result<(), RedfishError> {
     tracing_subscriber::fmt::init();
     let (host, port, user, password, no_tls) = parse_args();
+    let no_tls_proto = std::env::args().any(|a| a == "--no-tls");
     let creds = Credentials::new(&user, &password);
-    let config = ConnectionConfig { verify_tls: !no_tls, ..Default::default() };
+    let config = ConnectionConfig { verify_tls: !no_tls, use_tls: !no_tls_proto, ..Default::default() };
     let ctx = connect(&host, port, creds, AuthMode::Session, config).await?;
 
     println!("Partial discovery - Systems only ...");
