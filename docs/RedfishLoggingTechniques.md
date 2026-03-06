@@ -3,11 +3,11 @@
 
 Redfish provides different filter techniques that would help with getting the targeted logs.  This document provides some of the best-known methods that can be used for filtering log files. 
 
-Please note that it is important to utilize these escape sequences used in the curl 
+Please note that it is important to utilize these escape sequences when using curl 
 - Use Double Quotes for the GET HTTPS Sequence 
 - Use \ before using $ 
 - Use & between multiple filters 
-- Use %20 when even there is space 
+- Use %20 wherever there is space 
 
                                                                           
 [[_TOC_]]
