@@ -235,8 +235,13 @@ started.
 ### Python
 
 ```bash
-# Install the SDK
-cd python/ && pip install -e .
+# Install dependencies
+cd python/
+pip install -r requirements.txt
+pip install -r requirements-dev.txt   # for running tests
+
+# Or install the SDK directly
+pip install -e .
 
 # Run a sample
 python samples/01_connect_discover.py
@@ -247,7 +252,8 @@ python samples/09_telemetry.py
 ### C++
 
 ```bash
-# Install build dependencies (Ubuntu / Debian)
+# Install build dependencies — see cpp/requirements.txt for all platforms
+# Ubuntu / Debian:
 sudo apt install build-essential cmake libcurl4-openssl-dev \
                  libssl-dev nlohmann-json3-dev
 
@@ -267,6 +273,10 @@ See [cpp/docs/api-guide.md](cpp/docs/api-guide.md) for the full C++ API referenc
 ### Rust
 
 ```bash
+# Toolchain (see rust/requirements.txt)
+# curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# All crate dependencies are fetched automatically by cargo
 # Build all samples (release)
 cd rust/
 cargo build --release

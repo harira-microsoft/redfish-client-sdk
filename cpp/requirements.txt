@@ -1,0 +1,26 @@
+# Redfish SDK — C++ system dependencies
+#
+# These are system-level packages required before running cmake.
+# Install using the package manager for your platform.
+#
+# Toolchain
+#   C++17 compiler (GCC >= 9 or Clang >= 10)
+#   CMake >= 3.16
+#
+# Ubuntu / Debian
+#   sudo apt install build-essential cmake libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
+#
+# RHEL / Fedora
+#   sudo dnf install gcc-c++ cmake libcurl-devel openssl-devel nlohmann-json-devel
+#
+# macOS (Homebrew)
+#   brew install cmake curl openssl nlohmann-json
+#
+# Windows (vcpkg)
+#   vcpkg install curl openssl nlohmann-json
+
+build-essential        # C++17 compiler + linker
+cmake >= 3.16          # build system
+libcurl >= 7.68        # HTTP transport (libcurl4-openssl-dev)
+openssl >= 1.1         # TLS (libssl-dev)
+nlohmann-json >= 3.2   # JSON parsing (nlohmann-json3-dev)

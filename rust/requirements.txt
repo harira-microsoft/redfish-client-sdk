@@ -1,0 +1,30 @@
+# Redfish SDK — Rust dependencies
+#
+# Rust crate dependencies are declared in Cargo.toml and resolved
+# automatically by cargo. No manual installation required.
+#
+# Run: cargo build       (fetches and compiles all dependencies)
+# Run: cargo test        (builds and runs all tests)
+#
+# Toolchain requirement
+#   rustc >= 1.75
+#   cargo >= 1.75
+#
+# Install Rust toolchain via rustup:
+#   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+#
+# Runtime crates (see Cargo.toml for pinned versions)
+reqwest = "0.12"       # HTTP client (TLS via rustls — no system OpenSSL needed)
+tokio = "1"            # async runtime
+serde = "1"            # serialisation framework
+serde_json = "1"       # JSON support
+axum = "0.7"           # event listener HTTP server
+thiserror = "1"        # error derive macros
+base64 = "0.22"        # Basic auth encoding
+tracing = "0.1"        # structured logging
+async-trait = "0.1"    # async fn in traits
+futures = "0.3"        # async stream utilities
+async-stream = "0.3"   # stream! macro
+urlencoding = "2"      # OData filter encoding
+pin-project = "1"      # pin projection for async types
+tokio-util = "0.7"     # tokio runtime utilities
