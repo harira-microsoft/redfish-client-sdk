@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# SEL parsing — FR6.6 (ported from team Rust client, src/events.rs)
+# SEL parsing — FR6.6 (IPMI SEL record parsing for OpenBMC / standard BMCs)
 # ---------------------------------------------------------------------------
 # IPMI SEL record type bytes for OpenBMC OEM timestamped events
 _SEL_TYPE_PXE = 0xCA       # PXE boot events

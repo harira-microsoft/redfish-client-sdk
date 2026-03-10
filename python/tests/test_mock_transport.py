@@ -125,7 +125,7 @@ class TestDefaultHttpClientRetry:
 # ---------------------------------------------------------------------------
 
 class TestParseSelEntry:
-    # Real production examples from team's test suite
+    # Realistic SEL entry examples covering common BMC event types
 
     def test_pxe_boot_start(self):
         rec = parse_sel_entry("b70fcad117db6837010000002000FFFF")
