@@ -241,7 +241,7 @@ void RedfishEventListener::stop()
     // Wake the select() in the supervisor via the self-pipe
     if (wake_write_ >= 0) {
         char byte = 1;
-        (void)::write(wake_write_, &byte, 1);
+        [[maybe_unused]] ssize_t r = ::write(wake_write_, &byte, 1);
     }
 
     if (supervisor_.joinable()) supervisor_.join();
