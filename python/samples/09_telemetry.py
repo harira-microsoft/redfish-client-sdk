@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Microsoft Corporation. All rights reserved.
+
 #!/usr/bin/env python3
 """Sample 09 — TelemetryService: metric reports and SSE streaming.
 

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Microsoft Corporation. All rights reserved.
+
 """
 Sample 14 — SEL (System Event Log) binary record parsing (FR6.6)
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use redfish_sdk::{connect, AuthMode, ConnectionConfig, Credentials, RedfishError, RedfishResponse};
 
 fn body_str(resp: &RedfishResponse, key: &str) -> String {

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Microsoft Corporation. All rights reserved.
+
 #!/usr/bin/env python3
 """Sample 05 — EventService subscriptions (subscribe / list / delete).
 
@@ -39,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-tls", action="store_true", help="Use plain HTTP instead of HTTPS (for simulators without SSL)")
     p.add_argument(
         "--destination",
-        default="http://192.168.1.10:9090/events",
+        default="http://YOUR_LISTENER_HOST:9090/events",
         help="HTTP destination URL for the subscription",
     )
     return p.parse_args()

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 /**
  * Sample 10 — UpdateService: firmware inventory and SimpleUpdate
  *

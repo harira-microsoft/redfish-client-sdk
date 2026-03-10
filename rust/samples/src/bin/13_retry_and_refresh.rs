@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use redfish_sdk::{connect_blocking, AuthMode, ConnectionConfig, Credentials, RedfishError};
 
 fn main() -> Result<(), RedfishError> {

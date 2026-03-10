@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use crate::transport::types::{ConnectionConfig, RawHttpResponse, TimeoutConfig};
 use crate::errors::RedfishError;
 use std::collections::HashMap;

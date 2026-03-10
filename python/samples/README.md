@@ -58,6 +58,6 @@ done
 
 # Against a real BMC with self-signed cert
 for s in samples/0*.py; do
-    echo "=== $s ==="; python "$s" --host 192.168.1.100 --port 443 --no-tls-verify; echo
+    echo "=== $s ==="; python "$s" --host BMC_HOST --port 443 --no-tls-verify; echo
 done
 ```

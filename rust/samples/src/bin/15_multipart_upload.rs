@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use std::io::Write;
 use redfish_sdk::RedfishError;
 

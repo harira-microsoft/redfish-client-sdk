@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Microsoft Corporation. All rights reserved.
+
 """
 Sample 13 — Retry config and session refresh (FR1.8, FR1.9, FR1.10)
 

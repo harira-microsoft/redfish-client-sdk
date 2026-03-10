@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use std::collections::HashMap;
 use crate::transport::types::RawHttpResponse;
 

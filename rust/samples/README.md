@@ -86,7 +86,7 @@ redfish-mockup-server --host 127.0.0.1 --port 8000
 ```bash
 # Real BMC with self-signed cert (lab)
 ./target/release/01_connect_discover \
-    --host 192.168.1.100 --port 443 \
+    --host BMC_HOST --port 443 \
     --user admin --password yourpassword \
     --no-tls-verify
 

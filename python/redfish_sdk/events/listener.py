@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Microsoft Corporation. All rights reserved.
+
 """
 Redfish Event Listener — embedded HTTP/HTTPS server for receiving
 push-mode event notifications from a BMC EventService subscription.
@@ -301,7 +304,7 @@ class RedfishEventListener:
     def listen_url(self) -> str:
         """The URL at which the BMC should POST events.
 
-        Example: ``http://192.168.1.10:9090/events``
+        Example: ``http://YOUR_LISTENER_HOST:9090/events``
         """
         scheme = "https" if (self._tls_cert and self._tls_key) else "http"
         return f"{scheme}://{self._host}:{self._port}{self._path}"

@@ -98,7 +98,7 @@ config.tls_ca_cert = "/etc/ssl/certs/my-datacenter-ca.crt";   // production
 ```
 
 ```bash
-./build/01_connect_discover 192.168.1.100 443
+./build/01_connect_discover BMC_HOST 443
 ```
 
 ## Run All

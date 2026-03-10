@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use std::{sync::{atomic::{AtomicU64, Ordering}, Arc}, time::Duration};
 use redfish_sdk::{connect, AuthMode, ConnectionConfig, Credentials, RedfishError, RedfishEventListener};
 

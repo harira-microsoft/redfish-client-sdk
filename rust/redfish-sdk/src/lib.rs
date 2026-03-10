@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 //! Redfish Client SDK — idiomatic Rust
 //!
 //! # Quick start
@@ -9,7 +12,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<(), redfish_sdk::RedfishError> {
 //!     let creds = Credentials::new("admin", "password");
-//!     let ctx = connect("192.168.1.100", 443, creds, AuthMode::Session,
+//!     let ctx = connect("BMC_HOST", 443, creds, AuthMode::Session,
 //!                       ConnectionConfig::default()).await?;
 //!
 //!     let log = ctx.log_service();

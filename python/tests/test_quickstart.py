@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Microsoft Corporation. All rights reserved.
+
 """
 tests/test_quickstart.py  ─  SDK Tutorial for New Developers
 ═══════════════════════════════════════════════════════════════════

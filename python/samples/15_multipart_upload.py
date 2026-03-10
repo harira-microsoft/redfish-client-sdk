@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) Microsoft Corporation. All rights reserved.
+
 """
 Sample 15 — Multipart firmware upload via MockHttpClient (FR7.5)
 

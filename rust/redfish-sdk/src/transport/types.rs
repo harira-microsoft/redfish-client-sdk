@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 
 /// Authentication mode for the connection.
 #[derive(Debug, Clone, PartialEq, Eq)]

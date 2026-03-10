@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use crate::errors::RedfishError;
 use crate::protocol::response::RedfishMessage;
 use crate::transport::http_client::HttpClient;

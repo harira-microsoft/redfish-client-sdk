@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use redfish_sdk::{connect, AuthMode, ConnectionConfig, Credentials, RedfishError};
 
 fn parse_args() -> (String, u16, String, String, bool) {
@@ -29,7 +32,7 @@ async fn main() -> Result<(), RedfishError> {
     let ctx = connect(&host, port, Credentials::new(&user, &password),
         AuthMode::Session, ConnectionConfig { verify_tls: !no_tls, use_tls: !no_tls_proto, ..Default::default() }).await?;
     let events = ctx.event_service();
-    let destination = "http://192.168.1.10:9090/events";
+    let destination = "http://YOUR_LISTENER_HOST:9090/events";
 
     println!("Creating subscription -> {destination}");
     let sub_resp = events.subscribe(

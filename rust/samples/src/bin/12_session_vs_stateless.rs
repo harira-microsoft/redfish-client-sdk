@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use std::time::Instant;
 use redfish_sdk::{connect, AuthMode, ConnectionConfig, Credentials, RedfishError};
 

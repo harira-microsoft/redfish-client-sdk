@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use std::sync::Arc;
 use crate::errors::RedfishError;
 use crate::transport::{DefaultHttpClient, AuthManager, EndpointCapabilities, ConnectionConfig, AuthMode, Credentials};

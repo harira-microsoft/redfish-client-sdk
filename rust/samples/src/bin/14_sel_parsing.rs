@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 use redfish_sdk::services::log_service::LogServiceHandle;
 
 static SAMPLES: &[(&str, &str, &str)] = &[

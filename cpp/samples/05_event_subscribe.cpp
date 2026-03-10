@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 /**
  * Sample 05 — Event Subscribe
  */
@@ -20,7 +23,7 @@ int main(int argc, char* argv[]) {
         auto& ev = ctx->events();
 
         // Subscribe
-        auto sub = ev.subscribe("http://192.168.1.10:9090/events",
+        auto sub = ev.subscribe("http://YOUR_LISTENER_HOST:9090/events",
                                 {"Alert", "ResourceUpdated"},
                                 {}, {}, {}, "", "CPP-SDK-Sample-05");
         std::string sub_uri;

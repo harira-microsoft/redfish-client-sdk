@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 //! Redfish event listener — embedded HTTP(S) server that receives push events.
 //!
 //! Design §15: `RedfishEventListener` spins up an axum server on a
