@@ -5,11 +5,16 @@
 """Sample 05 — EventService subscriptions (subscribe / list / delete).
 
 Demonstrates:
-  - ctx.events.subscribe_async()
+  - ctx.events.subscribe_async()  — with event_types
+  - ctx.events.subscribe_async()  — with message_ids (MessageIds filter)
   - ctx.events.list_subscriptions_async()
   - ctx.events.get_subscription_async()
   - ctx.events.delete_subscription_async()
   - ctx.events.submit_test_event_async()
+
+MessageIds subscriptions let the BMC deliver only events whose MessageId
+matches one of the supplied registry-qualified IDs, e.g.:
+    "Base.1.8.Success", "OpenBMC.0.1.PowerButtonPressed"
 
 NOTE: This sample only manages subscriptions; it does not start a local
       listener.  For end-to-end event delivery see sample 06.
@@ -69,21 +74,50 @@ async def main() -> None:
     async with ctx:
         events = ctx.events
 
-        # ── Create subscription ─────────────────────────────────────────
-        print(f"Creating subscription → {args.destination}")
+        sub_uris: list[str] = []
+
+        # ── Subscription 1 — filter by EventTypes ──────────────────────
+        print(f"[1] Creating EventTypes subscription → {args.destination}")
         sub_resp = await events.subscribe_async(
             destination=args.destination,
             event_types=["Alert", "ResourceUpdated", "StatusChange"],
-            context="RSDK-Sample-05",
+            context="RSDK-Sample-05-EventTypes",
             protocol="Redfish",
         )
-
         if sub_resp.success:
             sub_uri = sub_resp.headers.get("Location") or sub_resp.body.get("@odata.id", "")
             print(f"  ✓ Subscribed — URI: {sub_uri}")
+            if sub_uri:
+                sub_uris.append(sub_uri)
         else:
             print(f"  ✗ Subscribe failed: HTTP {sub_resp.status_code}")
-            sub_uri = None
+
+        # ── Subscription 2 — filter by MessageIds ──────────────────────
+        # MessageIds is the recommended Redfish 1.5+ way to scope deliveries
+        # to a precise set of registry-qualified message identifiers.
+        target_message_ids = [
+            "Base.1.8.Success",
+            "Base.1.8.GeneralError",
+            "OpenBMC.0.1.PowerButtonPressed",
+        ]
+        print(f"\n[2] Creating MessageIds subscription → {args.destination}")
+        print(f"    MessageIds filter: {target_message_ids}")
+        msgid_resp = await events.subscribe_async(
+            destination=args.destination,
+            message_ids=target_message_ids,
+            context="RSDK-Sample-05-MessageIds",
+            protocol="Redfish",
+        )
+        if msgid_resp.success:
+            msgid_uri = msgid_resp.headers.get("Location") or msgid_resp.body.get("@odata.id", "")
+            print(f"  ✓ Subscribed — URI: {msgid_uri}")
+            if msgid_uri:
+                sub_uris.append(msgid_uri)
+        else:
+            print(f"  ✗ Subscribe failed: HTTP {msgid_resp.status_code}")
+
+        # Keep a single reference for the get/delete demo below
+        sub_uri = sub_uris[0] if sub_uris else None
 
         # ── List subscriptions ──────────────────────────────────────────
         print("\nListing all subscriptions …")
@@ -97,14 +131,16 @@ async def main() -> None:
             print(f"  ✗ List failed: HTTP {list_resp.status_code}")
 
         # ── Get single subscription ─────────────────────────────────────
-        if sub_uri:
-            print(f"\nFetching subscription detail: {sub_uri}")
-            get_resp = await events.get_subscription_async(sub_uri)
+        # Show details for each created subscription so MessageIds is visible
+        for uri in sub_uris:
+            print(f"\nFetching subscription detail: {uri}")
+            get_resp = await events.get_subscription_async(uri)
             if get_resp.success:
                 body = get_resp.body
                 print(f"  Destination : {body.get('Destination')}")
                 print(f"  Context     : {body.get('Context')}")
                 print(f"  EventTypes  : {body.get('EventTypes')}")
+                print(f"  MessageIds  : {body.get('MessageIds')}")
                 print(f"  Protocol    : {body.get('Protocol')}")
 
         # ── Submit test event ───────────────────────────────────────────
@@ -116,14 +152,14 @@ async def main() -> None:
             # Many simulators do not implement SubmitTestEvent — that is OK
             print(f"  ✗ HTTP {test_resp.status_code} (may not be supported)")
 
-        # ── Delete subscription ─────────────────────────────────────────
-        if sub_uri:
-            print(f"\nDeleting subscription: {sub_uri}")
-            del_resp = await events.delete_subscription_async(sub_uri)
+        # ── Delete all created subscriptions ───────────────────────────
+        print(f"\nDeleting {len(sub_uris)} subscription(s) …")
+        for uri in sub_uris:
+            del_resp = await events.delete_subscription_async(uri)
             if del_resp.success:
-                print("  ✓ Deleted")
+                print(f"  ✓ Deleted: {uri}")
             else:
-                print(f"  ✗ Delete failed: HTTP {del_resp.status_code}")
+                print(f"  ✗ Delete failed ({uri}): HTTP {del_resp.status_code}")
 
         print("\n✓ Event subscription sample complete")
 
