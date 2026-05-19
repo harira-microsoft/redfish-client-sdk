@@ -9,6 +9,7 @@ use crate::protocol::response::RedfishResponse;
 use crate::discovery::Discovery;
 use crate::services::event_service::EventServiceHandle;
 use crate::services::log_service::LogServiceHandle;
+use crate::services::ras_service::RasServiceHandle;
 use crate::services::telemetry_service::TelemetryServiceHandle;
 use crate::services::update_service::UpdateServiceHandle;
 
@@ -106,6 +107,9 @@ impl ClientContext {
     pub fn update_service(&self)    -> UpdateServiceHandle<'_> {
         UpdateServiceHandle::new(self)
     }
+    pub fn ras_service(&self)        -> RasServiceHandle<'_> {
+        RasServiceHandle::new(self)
+    }
     pub fn discovery(&self) -> Discovery<'_> {
         Discovery {
             http:      self.http.as_ref(),
@@ -128,6 +132,12 @@ impl ClientContext {
     }
     pub async fn del(&self, uri: &str) -> Result<RedfishResponse, RedfishError> {
         self.request("DELETE", uri, None).await
+    }
+    pub async fn put(&self, uri: &str, body: serde_json::Value) -> Result<RedfishResponse, RedfishError> {
+        self.request("PUT", uri, Some(body)).await
+    }
+    pub fn put_blocking(&self, uri: &str, b: serde_json::Value) -> Result<RedfishResponse, RedfishError> {
+        self.runtime.as_ref().expect("no runtime").block_on(self.put(uri, b))
     }
 
     pub fn get_blocking  (&self, uri: &str)                       -> Result<RedfishResponse, RedfishError> { self.runtime.as_ref().expect("no runtime").block_on(self.get(uri)) }

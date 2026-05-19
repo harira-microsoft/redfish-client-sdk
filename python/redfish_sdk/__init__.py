@@ -33,6 +33,13 @@ from redfish_sdk.protocol.response import RedfishMessage, RedfishResponse
 from redfish_sdk.protocol.task import RedfishTask, TaskState
 from redfish_sdk.services.event_service import RedfishEvent
 from redfish_sdk.services.log_service import ParsedSelRecord, parse_sel_entry
+from redfish_sdk.services.ras_service import (
+    CperSeverity,
+    RasEndpoint,
+    CperEvent,
+    CpadRecord,
+    RasServiceHandle,
+)
 from redfish_sdk.transport.http_client import MockHttpClient
 from redfish_sdk.models.redfish_types import RawHttpResponse
 
@@ -51,6 +58,11 @@ __all__ = [
     "RedfishEvent",
     "ParsedSelRecord",
     "parse_sel_entry",
+    "CperSeverity",
+    "RasEndpoint",
+    "CperEvent",
+    "CpadRecord",
+    "RasServiceHandle",
     "MockHttpClient",
     "RawHttpResponse",
     "RedfishSDKError",

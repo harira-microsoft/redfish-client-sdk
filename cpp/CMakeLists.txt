@@ -22,6 +22,7 @@ set(SDK_SOURCES
     src/discovery/discovery.cpp
     src/services/event_service.cpp
     src/services/log_service.cpp
+    src/services/ras_service.cpp
     src/services/telemetry_service.cpp
     src/services/update_service.cpp
     src/events/listener.cpp

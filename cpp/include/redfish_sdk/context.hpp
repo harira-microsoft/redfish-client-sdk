@@ -17,6 +17,7 @@
 #include "redfish_sdk/protocol/response.hpp"
 #include "redfish_sdk/services/event_service.hpp"
 #include "redfish_sdk/services/log_service.hpp"
+#include "redfish_sdk/services/ras_service.hpp"
 #include "redfish_sdk/services/telemetry_service.hpp"
 #include "redfish_sdk/services/update_service.hpp"
 
@@ -44,6 +45,7 @@ public:
     // ── Service handles ───────────────────────────────────────────────
     EventServiceHandle&    events()    { return *events_; }
     LogServiceHandle&      logs()      { return *logs_; }
+    RasServiceHandle&      ras()       { return *ras_; }
     TelemetryServiceHandle& telemetry(){ return *telemetry_; }
     UpdateServiceHandle&   update()    { return *update_; }
 
@@ -74,6 +76,7 @@ private:
 
     std::unique_ptr<EventServiceHandle>     events_;
     std::unique_ptr<LogServiceHandle>       logs_;
+    std::unique_ptr<RasServiceHandle>       ras_;
     std::unique_ptr<TelemetryServiceHandle> telemetry_;
     std::unique_ptr<UpdateServiceHandle>    update_;
 

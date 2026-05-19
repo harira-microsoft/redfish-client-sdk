@@ -31,6 +31,7 @@ ClientContext::~ClientContext() {
 void ClientContext::rebuild_service_handles() {
     events_   = std::make_unique<EventServiceHandle>   (*http_, auth_state_, discovery_.service_map);
     logs_     = std::make_unique<LogServiceHandle>     (*http_, auth_state_, discovery_.service_map);
+    ras_      = std::make_unique<RasServiceHandle>     (*http_, auth_state_, discovery_.service_map);
     telemetry_= std::make_unique<TelemetryServiceHandle>(*http_, auth_state_, discovery_.service_map);
     update_   = std::make_unique<UpdateServiceHandle>  (*http_, auth_state_, discovery_.service_map);
 }

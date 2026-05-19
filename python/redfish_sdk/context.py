@@ -112,6 +112,15 @@ class ClientContext:
         return self._service_handles["update_service"]
 
     @property
+    def ras_service(self):
+        from redfish_sdk.services.ras_service import RasServiceHandle
+        if "ras_service" not in self._service_handles:
+            self._service_handles["ras_service"] = RasServiceHandle(
+                self._http, self._auth_state, self._discovery_map
+            )
+        return self._service_handles["ras_service"]
+
+    @property
     def discovery(self):
         from redfish_sdk.discovery.discovery import Discovery
         if "discovery" not in self._service_handles:
@@ -139,6 +148,10 @@ class ClientContext:
     @property
     def update(self):
         return self.update_service
+
+    @property
+    def ras(self):
+        return self.ras_service
 
     # ------------------------------------------------------------------
     # Discovery convenience methods
