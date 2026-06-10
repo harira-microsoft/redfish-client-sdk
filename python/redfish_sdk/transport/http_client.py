@@ -390,6 +390,7 @@ class MockHttpClient(HttpClient):
 def _to_raw(response: httpx.Response) -> RawHttpResponse:
     headers = dict(response.headers.items())
     body_text = response.text
+    body_bytes = response.content
     body_json: dict | list | None = None
     content_type = headers.get("content-type", "")
     if "application/json" in content_type or "odata" in content_type:
@@ -406,4 +407,5 @@ def _to_raw(response: httpx.Response) -> RawHttpResponse:
         headers=headers,
         body_text=body_text,
         body_json=body_json,
+        body_bytes=body_bytes,
     )

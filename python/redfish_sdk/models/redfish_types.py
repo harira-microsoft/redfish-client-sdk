@@ -126,3 +126,4 @@ class RawHttpResponse:
     headers: dict[str, str]
     body_text: str
     body_json: dict | list | None = None
+    body_bytes: bytes | None = None
