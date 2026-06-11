@@ -320,6 +320,8 @@ class RasServiceHandle:
             return json.dumps(raw.body_json).encode()
 
         # Raw binary / text fallback
+        if raw.body_bytes:
+            return raw.body_bytes
         return (raw.body_text or "").encode()
 
     def fetch_cper_data(self, additional_data_uri: str) -> bytes:
