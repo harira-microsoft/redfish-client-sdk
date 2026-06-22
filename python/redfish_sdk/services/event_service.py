@@ -240,6 +240,12 @@ def _parse_sse_block(block: str) -> RedfishEvent | None:
     if not events_list:
         return None
     ev = events_list[0]
+    origin = ev.get("OriginOfCondition")
+    if isinstance(origin, dict):
+        origin = origin.get("@odata.id")
+    elif not isinstance(origin, str):
+        origin = None
+
     return RedfishEvent(
         event_id=str(ev.get("EventId", "")),
         event_type=ev.get("EventType", ""),
@@ -247,6 +253,6 @@ def _parse_sse_block(block: str) -> RedfishEvent | None:
         message_id=ev.get("MessageId", ""),
         message=ev.get("Message", ""),
         severity=ev.get("Severity", ""),
-        origin_of_condition=ev.get("OriginOfCondition", {}).get("@odata.id"),
+        origin_of_condition=origin,
         raw=ev,
     )

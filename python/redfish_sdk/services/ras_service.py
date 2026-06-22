@@ -39,28 +39,31 @@ logger = logging.getLogger(__name__)
 # the RAS API Redfish registry is finalised.
 _DEFAULT_SERVICE_PATH = "/redfish/v1/RasService"
 
-# Registry prefixes used when subscribing to CPER events.  Populate this list
-# with the finalised OCP RAS registry prefix (e.g. "RASEvent") before use.
-RAS_REGISTRY_PREFIXES: list[str] = []
+# Registry prefixes used when subscribing to CPER events.
+RAS_REGISTRY_PREFIXES: list[str] = ["OCPRAS"]
 
 
 # ---------------------------------------------------------------------------
 # CPER severity / queue types
 # ---------------------------------------------------------------------------
 
+# §5.2 OCP RAS Message Registry → CperSeverity mapping
+_OCPRAS_MESSAGE_ID_MAP: dict[str, str] = {
+    "OCPRAS.1.0.0.FatalError": "Fatal",
+    "OCPRAS.1.0.0.UncorrectedError": "Recoverable",
+    "OCPRAS.1.0.0.CorrectedError": "Corrected",
+    "OCPRAS.1.0.0.InformationalEvent": "Informational",
+    "OCPRAS.1.0.0.PlatformActionEvent": "PlatformActionStatus",
+    "OCPRAS.1.0.0.CPADAccepted": "Informational",
+    "OCPRAS.1.0.0.CPADRejected": "Recoverable",
+}
+
+
 class CperSeverity(Enum):
     """
-    Maps to the five RAS API CPER queues defined in the OCP RAS API v1.0 spec.
-
-    Queue         Description
-    ─────────────────────────────────────────────────────────────────────────
-    PlatformEvent Informational CPERs / Platform Action Events (not errors)
-    Informational Deferred errors including poison generation
-    Corrected     Hardware-corrected errors
-    Recoverable   Errors where the OS may survive (poison consumption, PCIe)
-    Fatal         Errors that crash the OS / generate hardware crashdumps
+    Maps to the five RAS API CPER queues defined in the OCP RAS API v1.0 spec §4.6.
     """
-    PLATFORM_EVENT = "PlatformEvent"
+    PLATFORM_EVENT = "PlatformActionStatus"
     INFORMATIONAL  = "Informational"
     CORRECTED      = "Corrected"
     RECOVERABLE    = "Recoverable"
@@ -68,7 +71,12 @@ class CperSeverity(Enum):
 
     @classmethod
     def from_message_id(cls, message_id: str) -> "CperSeverity | None":
-        """Infer severity from a Redfish MessageId string (case-insensitive)."""
+        """Infer severity from a Redfish MessageId string."""
+        # Direct lookup first (handles OCPRAS.1.0.0.* IDs)
+        mapped = _OCPRAS_MESSAGE_ID_MAP.get(message_id)
+        if mapped:
+            return cls(mapped)
+        # Fallback: case-insensitive substring match
         lower = message_id.lower()
         for sev in cls:
             if sev.value.lower() in lower:
@@ -117,15 +125,20 @@ class CperEvent:
 
     @classmethod
     def from_event_record(cls, record: dict) -> "CperEvent":
-        """Parse a single EventRecord dict from a Redfish EventMessage payload."""
+        """Parse a single EventRecord dict from a Redfish EventMessage payload.
+        
+        Handles both:
+          - Pattern A: inline base64 CPER in DiagnosticData field
+          - Pattern B: AdditionalDataURI pointing to attachment
+        """
         message_id = record.get("MessageId", "")
         severity   = CperSeverity.from_message_id(message_id)
 
-        # Inline CPER: may be base64-encoded in AdditionalData or a vendor
-        # extension field such as Oem.CperData.
+        # Inline CPER: Pattern A uses DiagnosticData, also check legacy fields
         cper_data: bytes | None = None
         raw_cper = (
-            record.get("AdditionalData")
+            record.get("DiagnosticData")
+            or record.get("AdditionalData")
             or record.get("Oem", {}).get("CperData")
         )
         if isinstance(raw_cper, str):
@@ -134,12 +147,22 @@ class CperEvent:
             except Exception:
                 pass
 
+        # Extract OEM metadata if present
+        oem = record.get("Oem", {}).get("OCPRASAPIWS", {})
+
+        # OriginOfCondition may be a dict {"@odata.id": "..."} or a plain string
+        origin = record.get("OriginOfCondition")
+        if isinstance(origin, dict):
+            origin = origin.get("@odata.id")
+        elif not isinstance(origin, str):
+            origin = None
+
         return cls(
             event_id            = record.get("EventId", ""),
             message_id          = message_id,
             severity            = severity,
             timestamp           = record.get("EventTimestamp", ""),
-            origin_of_condition = record.get("OriginOfCondition", {}).get("@odata.id"),
+            origin_of_condition = origin,
             cper_data           = cper_data,
             additional_data_uri = record.get("AdditionalDataURI"),
             raw                 = record,
@@ -249,16 +272,17 @@ class RasServiceHandle:
         destination:       str,
         registry_prefixes: list[str] | None = None,
         message_ids:       list[str] | None = None,
-        context:           str = "RAS-CPER",
+        resource_types:    list[str] | None = None,
+        origin_resources:  list[dict] | None = None,
+        context:           str = "RAS Events Subscription",
         event_format_type: str = "Event",
     ) -> RedfishResponse:
         """
-        Subscribe to CPER-carrying Redfish events from this BMC.
+        Subscribe to CPER-carrying Redfish events from this BMC per §5.4.
 
-        ``registry_prefixes`` and ``message_ids`` narrow the subscription to
-        RAS-specific events.  If both are omitted, ``RAS_REGISTRY_PREFIXES`` is
-        used (update that list once the OCP registry name is finalised; sending
-        an empty subscription receives all events from the BMC).
+        ``registry_prefixes`` defaults to ["OCPRAS"] per the OCP RAS Message Registry.
+        ``resource_types`` defaults to ["LogEntry"] to receive CPER LogEntry events.
+        ``origin_resources`` can specify the CPER LogService to scope events.
         """
         effective_prefixes = (
             registry_prefixes if registry_prefixes is not None
@@ -276,6 +300,10 @@ class RasServiceHandle:
             body["RegistryPrefixes"] = effective_prefixes
         if message_ids:
             body["MessageIds"] = message_ids
+        if resource_types:
+            body["ResourceTypes"] = resource_types
+        if origin_resources:
+            body["OriginResources"] = origin_resources
 
         subs_uri = self._discovery_map.get("EventService", "/redfish/v1/EventService")
         subs_uri = f"{subs_uri}/Subscriptions"
@@ -364,17 +392,15 @@ class RasServiceHandle:
     @staticmethod
     def parse_cper_events(event_payload: dict) -> list[CperEvent]:
         """
-        Extract ``CperEvent`` objects from a Redfish EventMessage payload dict
-        (the JSON body POSTed to your event listener by the BMC).
+        Extract ``CperEvent`` objects from a Redfish EventMessage payload dict.
 
-        Filters to records that are identifiable as RAS/CPER events — those
-        where a severity can be inferred or the MessageId contains "cper"/"ras".
-        Non-RAS events in the same payload are silently ignored.
+        Filters to records identifiable as RAS/CPER events — those where a
+        severity can be inferred or the MessageId contains "ocpras"/"cper"/"ras".
         """
         events: list[CperEvent] = []
         for record in event_payload.get("Events", []):
             ev = CperEvent.from_event_record(record)
             mid_lower = ev.message_id.lower()
-            if ev.severity is not None or "cper" in mid_lower or "ras" in mid_lower:
+            if ev.severity is not None or "ocpras" in mid_lower or "cper" in mid_lower or "ras" in mid_lower:
                 events.append(ev)
         return events
