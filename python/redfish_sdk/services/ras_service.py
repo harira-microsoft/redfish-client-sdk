@@ -76,10 +76,13 @@ class CperSeverity(Enum):
         mapped = _OCPRAS_MESSAGE_ID_MAP.get(message_id)
         if mapped:
             return cls(mapped)
-        # Fallback: case-insensitive substring match
+        # Fallback: case-insensitive substring match on value and name
         lower = message_id.lower()
         for sev in cls:
             if sev.value.lower() in lower:
+                return sev
+            # Also match enum name (e.g. PLATFORM_EVENT → "platformevent")
+            if sev.name.lower().replace("_", "") in lower:
                 return sev
         return None
 
